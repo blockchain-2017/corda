@@ -75,19 +75,73 @@ object VaultSchema {
         var lockUpdateTime: Instant?
     }
 
-    /**
-     * The following entity is for illustration purposes only as used by VaultQueryTests
-     */
     @Table(name = "vault_linear_states")
     @Entity(model = "vault")
-    interface VaultLinearState : Persistable {
+//    interface VaultLinearState : Requery.PersistentState {
+      interface VaultLinearState : Persistable {
+
+        @get:Key
+        @get:Generated
+        @get:Column(name = "id")
+        var id: Int
+
+        /** refers to one or many Anonymous parties who may be able to consume a state in a transaction */
+//        @get:OneToMany(mappedBy = "key")
+//        var participants: Set<VaultParty>
+
+        /**
+         * [LinearState] attributes
+         */
 
         @get:Index("external_id_index")
         @get:Column(name = "external_id")
         var externalId: String
 
-        @get:Index("uuid_index")
         @get:Column(name = "uuid", unique = true, nullable = false)
         var uuid: UUID
+
+        /**
+         * [DealState] attributes
+         */
+
+        @get:Index("deal_reference_index")
+        @get:Column(name = "deal_reference")
+        var dealRef: String
+
+        @get:OneToMany(mappedBy = "linear_state_parties")
+        var dealParties: Set<VaultParty>
+
+//        @get:ForeignKey
+//        @get:OneToOne
+//        var owner: VaultParty
+
+    }
+
+    @Table(name = "vault_party")
+    @Entity(model = "vault")
+    interface VaultParty : Persistable  {
+
+        @get:Key
+        @get:Generated
+        @get:Column(name = "id")
+        var id: Int
+
+        // NOTE: remove this back reference when Requery supports Unidirectional relationships
+        @get:ManyToOne
+        @get:Column(name = "linear_state_parties")
+        val linearStateParties: VaultLinearState
+
+        /**
+         * [Party] attributes
+         */
+        @get:Column(name = "party_name")
+        var name: String
+
+        @get:Column(name = "party_key")
+        var key: String
+
+        // NOTE: remove this back reference when Requery supports Unidirectional relationships
+//        @get:OneToOne
+//        val owner: VaultLinearState
     }
 }
