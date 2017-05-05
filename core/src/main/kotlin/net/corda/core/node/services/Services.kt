@@ -14,7 +14,6 @@ import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.Party
 import net.corda.core.identity.PartyAndCertificate
 import net.corda.core.node.services.vault.PageSpecification
-import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.node.services.vault.Sort
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.serialization.OpaqueBytes
@@ -209,23 +208,13 @@ interface VaultService {
 
     // Note: cannot apply @JvmOverloads to interfaces nor interface implementations
     // Java Helpers
-    fun <T : ContractState> queryBy(): Vault.Page<T> = queryBy()
-    fun <T : ContractState> queryBy(criteria: QueryCriteria): Vault.Page<T> = queryBy(criteria)
-    fun <T : ContractState> queryBy(criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> = queryBy(criteria, paging)
-    fun <T : ContractState> queryBy(criteria: QueryCriteria, sorting: Sort): Vault.Page<T> = queryBy(criteria, sorting)
+    fun <T : ContractState> queryBy(criteria: QueryCriteria): Vault.Page<T> = queryBy(criteria, PageSpecification(), Sort(emptySet()))
+    fun <T : ContractState> queryBy(criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> = queryBy(criteria, paging, Sort(emptySet()))
+    fun <T : ContractState> queryBy(criteria: QueryCriteria, sorting: Sort): Vault.Page<T> = queryBy(criteria, PageSpecification(), sorting)
 
-    fun <T : ContractState> trackBy(): Vault.PageAndUpdates<T> = trackBy()
-    fun <T : ContractState> trackBy(criteria: QueryCriteria): Vault.PageAndUpdates<T> = trackBy(criteria)
-    fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification): Vault.PageAndUpdates<T> = trackBy(criteria, paging)
-    fun <T : ContractState> trackBy(criteria: QueryCriteria, sorting: Sort): Vault.PageAndUpdates<T> = trackBy(criteria, Sort(emptySet()))
-
-    /**
-     * Generic vault query function which takes a [QueryCriteria] object to define filters
-     * and returns an [Iterable] set of [StateAndRef]
-     *
-     * Note: the iterator is lazy and client driven.
-     */
-    fun <T : ContractState> queryBy(criteria: QueryCriteria): Iterable<StateAndRef<T>>
+    fun <T : ContractState> trackBy(criteria: QueryCriteria): Vault.PageAndUpdates<T> = trackBy(criteria, PageSpecification(), Sort(emptySet()))
+    fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification): Vault.PageAndUpdates<T> = trackBy(criteria, paging, Sort(emptySet()))
+    fun <T : ContractState> trackBy(criteria: QueryCriteria, sorting: Sort): Vault.PageAndUpdates<T> = trackBy(criteria, sorting = Sort(emptySet()))
 
     /**
      * Return unconsumed [ContractState]s for a given set of [StateRef]s
