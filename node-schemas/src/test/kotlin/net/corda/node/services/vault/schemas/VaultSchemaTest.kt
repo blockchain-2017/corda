@@ -43,10 +43,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.corda.contracts.testing.DummyLinearContract
-import net.corda.testing.ALICE
-import net.corda.testing.BOB
-import net.corda.testing.CHARLIE
-import org.junit.Assert.assertThat
+import net.corda.core.utilities.*
 
 class VaultSchemaTest {
 
@@ -359,7 +356,7 @@ class VaultSchemaTest {
 
         // counterparty
         val cpty = VaultPartyEntity()
-        cpty.name = BOB.name
+        cpty.name = BOB.name.commonName
         cpty.key = BOB.owningKey.toBase58String()
 
         data.invoke {
