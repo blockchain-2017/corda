@@ -36,7 +36,6 @@ sealed class QueryCriteria {
      */
     data class LinearStateQueryCriteria @JvmOverloads constructor(
             val linearId: List<UniqueIdentifier>? = null,
-            val latestOnly: Boolean? = true,
             val dealRef: List<String>? = null,
             val dealPartyName: List<X500Name>? = null) : QueryCriteria()
 
@@ -54,7 +53,7 @@ sealed class QueryCriteria {
             val tokenValue: List<String>? = null,
             val issuerPartyName: List<X500Name>? = null,
             val issuerRef: List<OpaqueBytes>? = null,
-            val exitKeyIdentity: List<String>? = null) : QueryCriteria()
+            val exitKeyIdentity: List<X500Name>? = null) : QueryCriteria()
 
     /**
      * VaultCustomQueryCriteria: provides query by custom attributes defined in a contracts

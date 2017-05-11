@@ -8,6 +8,8 @@ import io.requery.kotlin.`in`
 import io.requery.kotlin.eq
 import io.requery.kotlin.isNull
 import io.requery.kotlin.notNull
+import io.requery.query.Condition
+import io.requery.query.OrderingExpression
 import io.requery.query.RowExpression
 import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.OnLedgerAsset
@@ -224,13 +226,50 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
 
     override fun <T : ContractState> queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> {
 
-        TODO("Under construction")
+        val criteriaParser = QueryCriteriaParser()
 
-        // If [VaultQueryCriteria.PageSpecification] specified
-        // must return (CloseableIterator) result.get().iterator(skip, take)
-        // where
-        //  skip = Max[(pageNumber - 1),0] * pageSize
-        //  take = pageSize
+        val page =
+        session.withTransaction(TransactionIsolation.REPEATABLE_READ) {
+
+            val query = select(VaultSchema.VaultStates::class)
+
+            val condition: Condition<*,*> = criteriaParser.parse(criteria)
+            query.where(condition)
+
+            // filter criteria
+//            query.where(VaultSchema.VaultStates::stateStatus `in` emptySet<Vault.StateStatus>())
+//                    .and(VaultSchema.VaultStates::contractStateClassName `in` emptySet<String>())
+//                    .or(VaultSchema.VaultStates::lockId.isNull())
+
+            // Pagination
+            query.limit((paging.pageNumber + 1) * paging.pageSize)
+            //query.offset()
+
+            // Sorting
+            val orderByExpressions : MutableList<OrderingExpression<*>> = mutableListOf()
+            sorting.columns.map {
+                orderByExpressions.add(criteriaParser.parseSorting(it))
+            }
+            query.orderBy(*orderByExpressions.toTypedArray())
+
+            // Execute
+            val boundedIterator = query.get().iterator(paging.pageNumber * paging.pageSize, paging.pageSize)
+            val statesAndRefs: MutableList<StateAndRef<*>> = mutableListOf()
+            val statesMeta: MutableList<Vault.StateMetadata> = mutableListOf()
+
+            Sequence { boundedIterator }
+                    .map { it ->
+                        val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
+                        val state = it.contractState.deserialize<TransactionState<T>>(storageKryo())
+                        statesMeta.add(Vault.StateMetadata(stateRef, it.contractStateClassName, it.recordedTime, it.consumedTime, it.stateStatus, it.notaryName, it.notaryKey, it.lockId, it.lockUpdateTime))
+                        statesAndRefs.add(StateAndRef(state, stateRef))
+                    }
+
+            val totalStates = session.count().get().value()
+            Vault.Page(states = statesAndRefs, statesMetadata = statesMeta, pageable = paging, totalStatesAvailable = totalStates)
+        }
+
+        return page as Vault.Page<T>
     }
 
     override fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.PageAndUpdates<T> {

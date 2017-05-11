@@ -70,21 +70,21 @@ class LogicalExpression<L, R>(leftOperand: L,
  *  paging and sorting capability:
  *  https://docs.spring.io/spring-data/commons/docs/current/api/org/springframework/data/repository/PagingAndSortingRepository.html
  */
-val DEFAULT_PAGE_NUM = 0L
-val DEFAULT_PAGE_SIZE = 200L
+val DEFAULT_PAGE_NUM = 0
+val DEFAULT_PAGE_SIZE = 200
 
 /**
  * Note: this maximum size will be configurable in future (to allow for large JVM heap sized node configurations)
  *       Use [PageSpecification] to correctly handle a number of bounded pages of [MAX_PAGE_SIZE].
  */
-val MAX_PAGE_SIZE = 512L
+val MAX_PAGE_SIZE = 512
 
 /**
  * PageSpecification allows specification of a page number (starting from 0 as default) and page size (defaulting to
  * [DEFAULT_PAGE_SIZE] with a maximum page size of [DEFAULT_PAGE_SIZE]
  */
 @CordaSerializable
-data class PageSpecification(val pageNumber: Long = DEFAULT_PAGE_NUM, val pageSize: Long = DEFAULT_PAGE_SIZE)
+data class PageSpecification(val pageNumber: Int = DEFAULT_PAGE_NUM, val pageSize: Int = DEFAULT_PAGE_SIZE)
 
 /**
  * Sort allows specification of a set of entity attribute names and their associated directionality
