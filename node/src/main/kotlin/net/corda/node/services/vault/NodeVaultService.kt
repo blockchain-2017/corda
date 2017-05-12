@@ -257,15 +257,16 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
             val statesAndRefs: MutableList<StateAndRef<*>> = mutableListOf()
             val statesMeta: MutableList<Vault.StateMetadata> = mutableListOf()
 
-            Sequence { boundedIterator }
-                    .map { it ->
+            var totalStates = 0
+            boundedIterator.asSequence()
+                    .forEach { it ->
                         val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
                         val state = it.contractState.deserialize<TransactionState<T>>(storageKryo())
                         statesMeta.add(Vault.StateMetadata(stateRef, it.contractStateClassName, it.recordedTime, it.consumedTime, it.stateStatus, it.notaryName, it.notaryKey, it.lockId, it.lockUpdateTime))
                         statesAndRefs.add(StateAndRef(state, stateRef))
+                        totalStates +=1
                     }
 
-            val totalStates = session.count().get().value()
             Vault.Page(states = statesAndRefs, statesMetadata = statesMeta, pageable = paging, totalStatesAvailable = totalStates)
         }
 

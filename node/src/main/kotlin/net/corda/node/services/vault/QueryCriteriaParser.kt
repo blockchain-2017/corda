@@ -9,8 +9,8 @@ import net.corda.core.flows.FlowException
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.*
 import net.corda.node.services.vault.schemas.VaultSchema
-import net.corda.schemas.CommercialPaperSchemaV1
 import java.util.*
+import kotlin.reflect.KMutableProperty1
 
 class QueryCriteriaParser {
 
@@ -45,6 +45,8 @@ class QueryCriteriaParser {
                     parse(criteria.a)
                     parse(criteria.b)
                 }
+                else ->
+                    throw InvalidQueryCriteriaException(criteria::class.java)
             }
 
         return whereClause
@@ -170,21 +172,21 @@ class QueryCriteriaParser {
     }
 
 
-    fun parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<*,*>): LogicalCondition<*, *>  {
+//    fun parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<*,*>,*>): LogicalCondition<*, *>  {
+//    fun parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<VaultSchema.VaultStates, Vault.StateStatus>, Vault.StateStatus>) : LogicalCondition<*, *> {
+    fun parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<*,*>) : LogicalCondition<*, *> {
 
         val logicalExpr = criteria.indexExpression //as LogicalCondition<*,*>
 
-        val property = CommercialPaperSchemaV1.PersistentCommercialPaperState::currency
-//        val property = logicalExpr?.leftOperand as KMutableProperty1<Any,*>
+        val property = logicalExpr?.leftOperand as KMutableProperty1<VaultSchema.VaultStates, Vault.StateStatus>
 
-        // parse quantity
         val attribute = findAttribute(property)
-        val attributeBuilder = AttributeBuilder<Any,String>(attribute.name, attribute.classType)
+        val attributeBuilder = AttributeBuilder<Any,Vault.StateStatus>(attribute.name, attribute.classType)
         val queryAttribute = attributeBuilder.build()
 
         val logicalCondition =
             when (logicalExpr?.operator) {
-                Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand.toString())
+                Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand as Vault.StateStatus)
                 else -> {
                     throw InvalidQueryOperatorException(logicalExpr!!.operator)
                 }

@@ -66,7 +66,7 @@ sealed class QueryCriteria {
      *
      * Refer to [CommercialPaper.State] for a concrete example.
      */
-    data class VaultCustomQueryCriteria<L,R>(val indexExpression: Logical<L,R>? = null) : QueryCriteria()
+    data class VaultCustomQueryCriteria<L,R>(val indexExpression: Logical<L,R>) : QueryCriteria()
 
     // enable composition of [QueryCriteria]
     data class AndComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria()

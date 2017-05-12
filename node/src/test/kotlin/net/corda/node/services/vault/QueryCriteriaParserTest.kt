@@ -14,6 +14,10 @@ import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.TEST_TX_TIME
+import net.corda.node.services.contract.schemas.CommercialPaperSchemaV2
+import net.corda.node.services.vault.schemas.CommercialPaperSchemaV3
+import net.corda.node.services.contract.schemas.CommercialPaperSchemaV4
+import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.CommercialPaperSchemaV1
@@ -29,6 +33,7 @@ import org.junit.Test
 import java.io.Closeable
 import java.time.temporal.ChronoUnit
 import java.util.*
+import kotlin.reflect.KMutableProperty1
 
 class QueryCriteriaParserTest {
 
@@ -204,11 +209,50 @@ class QueryCriteriaParserTest {
         fail()
     }
 
+    /** Commercial Paper V1 (Hibernate JPA */
     @Test
     fun VaultCustomQueryCriteriaSingleExpression() {
 
         // Commercial Paper
         val expression = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
+        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
+        criteriaParse.parse(criteria1)
+
+        fail()
+    }
+
+    /** Commercial Paper V2 (Requery JPA) */
+    @Test
+    fun VaultCustomQueryCriteriaSingleExpressionJPA() {
+
+        // Commercial Paper
+        val expression = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::currency, Operator.EQUAL, USD.currencyCode)
+        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
+        criteriaParse.parse(criteria1)
+
+        fail()
+    }
+
+    /** Commercial Paper V3 (Requery Kotlin interface class) */
+    @Test
+    fun VaultCustomQueryCriteriaSingleExpressionInterface() {
+
+        // Commercial Paper
+        val expression = LogicalExpression(VaultSchema.VaultStates::stateStatus, Operator.EQUAL, Vault.StateStatus.UNCONSUMED)
+//        val expression = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
+
+        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
+        val requeryExpr = criteriaParse.parse(criteria1)
+        assertThat(requeryExpr.operator).isEqualTo(io.requery.query.Operator.EQUAL)
+
+    }
+
+    /** Commercial Paper V4 (Requery Kotlin data class) */
+    @Test
+    fun VaultCustomQueryCriteriaSingleExpressionDataClass() {
+
+        // Commercial Paper
+        val expression = LogicalExpression(CommercialPaperSchemaV4.PersistentCommercialPaperState4::currency, Operator.EQUAL, USD.currencyCode)
         val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
         criteriaParse.parse(criteria1)
 

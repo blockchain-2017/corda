@@ -3,6 +3,7 @@ package net.corda.node.services.database
 import io.requery.Persistable
 import io.requery.kotlin.eq
 import io.requery.sql.KotlinEntityDataStore
+import junit.framework.Assert.assertTrue
 import net.corda.core.contracts.DummyContract
 import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.TransactionType
@@ -120,6 +121,32 @@ class RequeryConfigurationTest {
                 val result = select(VaultSchema.VaultStates::class) where (VaultSchema.VaultStates::txId eq txn.tx.inputs[0].txhash.toString())
                 Assertions.assertThat(result.get().count() == 0)
             }
+        }
+    }
+
+    @Test
+    fun `test calling an arbitrary JDBC native query`() {
+
+        val txn = newTransaction()
+
+        database.transaction {
+            transactionStorage.addTransaction(txn)
+            requerySession.withTransaction {
+                insert(createVaultStateEntity(txn))
+            }
+        }
+
+        val dataSourceProperties = makeTestDataSourceProperties()
+        val nativeQuery = "SELECT v.transaction_id, v.output_index FROM vault_states v WHERE v.state_status = 0"
+
+        database.transaction {
+            val configuration = RequeryConfiguration(dataSourceProperties, true)
+            val jdbcSession = configuration.jdbcSession()
+            val prepStatement = jdbcSession.prepareStatement(nativeQuery)
+            val rs = prepStatement.executeQuery()
+            assertTrue(rs.next())
+            assertEquals(rs.getString(1), txn.tx.inputs[0].txhash.toString())
+            assertEquals(rs.getInt(2), txn.tx.inputs[0].index)
         }
     }
 
