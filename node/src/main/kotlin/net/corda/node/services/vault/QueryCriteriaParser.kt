@@ -31,10 +31,10 @@ class QueryCriteriaParser {
                     println(criteria.javaClass.name)
                     parseCriteria(criteria)
                 }
-                is QueryCriteria.VaultCustomQueryCriteria<*,*> -> {
-                    println(criteria.javaClass.name)
-                    parseCriteria(criteria)
-                }
+//                is QueryCriteria.VaultCustomQueryCriteria<*,*> -> {
+//                    println(criteria.javaClass.name)
+//                    parseCriteria(criteria)
+//                }
                 is QueryCriteria.AndComposition -> {
                     println("AND")
                     parse(criteria.a)
@@ -77,7 +77,7 @@ class QueryCriteriaParser {
         return logicalCondition
     }
 
-    fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): LogicalCondition<*, *>  {
+    fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): LogicalCondition<*, *> {
         criteria.linearId
         criteria.dealRef
         criteria.dealPartyName
@@ -86,7 +86,7 @@ class QueryCriteriaParser {
         val attribute = findAttribute(VaultSchema.VaultStates::stateStatus)
         val attributeBuilder = AttributeBuilder<VaultSchema.VaultStates, Vault.StateStatus>(attribute.name, attribute.classType)
         val queryAttribute = attributeBuilder.build()
-        var logicalCondition : LogicalCondition<*,*> = queryAttribute.equal(Vault.StateStatus.UNCONSUMED)
+        var logicalCondition: LogicalCondition<*, *> = queryAttribute.equal(Vault.StateStatus.UNCONSUMED)
 
         // parse linearId
         logicalCondition = logicalCondition.and(
@@ -103,7 +103,7 @@ class QueryCriteriaParser {
                     val logicalCondition1 = queryAttribute1.`in`(criteria.linearId?.map { it.externalId })
                     val logicalCondition2 = queryAttribute2.`in`(criteria.linearId?.map { it.id })
                     logicalCondition1.and(logicalCondition2)
-            })
+                })
 
 
 
@@ -140,7 +140,7 @@ class QueryCriteriaParser {
         return logicalCondition
     }
 
-    fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): LogicalCondition<*, *>  {
+    fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): LogicalCondition<*, *> {
         criteria.tokenType
         criteria.tokenValue
         criteria.quantity
@@ -154,7 +154,7 @@ class QueryCriteriaParser {
         val attributeBuilder = AttributeBuilder<VaultSchema.VaultFungibleState, Long>(attribute.name, attribute.classType)
         val queryAttribute = attributeBuilder.build()
 
-        val quantityExpr : Logical<*, Long>? = criteria.quantity
+        val quantityExpr: Logical<*, Long>? = criteria.quantity
         quantityExpr?.let {
             it.leftOperand
             it.operator
@@ -171,28 +171,38 @@ class QueryCriteriaParser {
         throw RuntimeException()
     }
 
+    inline fun <reified L : Any, R>  parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>, R>): LogicalCondition<*, *> {
 
-//    fun parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<*,*>,*>): LogicalCondition<*, *>  {
-//    fun parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<VaultSchema.VaultStates, Vault.StateStatus>, Vault.StateStatus>) : LogicalCondition<*, *> {
-    fun parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<*,*>) : LogicalCondition<*, *> {
-
-        val logicalExpr = criteria.indexExpression //as LogicalCondition<*,*>
-
-        val property = logicalExpr?.leftOperand as KMutableProperty1<VaultSchema.VaultStates, Vault.StateStatus>
+        val logicalExpr = criteria.indexExpression
+        val property = logicalExpr?.leftOperand!!
 
         val attribute = findAttribute(property)
-        val attributeBuilder = AttributeBuilder<Any,Vault.StateStatus>(attribute.name, attribute.classType)
+        val attributeBuilder = AttributeBuilder<Any, R>(attribute.name, attribute.classType)
         val queryAttribute = attributeBuilder.build()
 
         val logicalCondition =
-            when (logicalExpr?.operator) {
-                Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand as Vault.StateStatus)
-                else -> {
-                    throw InvalidQueryOperatorException(logicalExpr!!.operator)
+                when (logicalExpr?.operator) {
+                    Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand)
+                    else -> {
+                        throw InvalidQueryOperatorException(logicalExpr!!.operator)
+                    }
                 }
-            }
 
         return logicalCondition
+    }
+
+    inline fun <reified L : Any, R> parseMe(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>,*>) {
+
+        val logicalExpr = criteria.indexExpression
+        val property = logicalExpr?.leftOperand!!
+        val attribute = findAttribute(property)
+        println(attribute)
+    }
+
+    inline fun <reified L : Any, R> parseMe2(expression: LogicalExpression<KMutableProperty1<L, R>,*>) {
+        val property = expression?.leftOperand!!
+        val attribute = findAttribute(property)
+        println(attribute)
     }
 
     fun parseSorting(sortColumn: Sort.SortColumn): OrderingExpression<*> {

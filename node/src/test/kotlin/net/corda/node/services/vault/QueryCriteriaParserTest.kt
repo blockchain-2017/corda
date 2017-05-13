@@ -1,5 +1,6 @@
 package net.corda.node.services.vault
 
+import io.requery.kotlin.findAttribute
 import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.DUMMY_CASH_ISSUER
 import net.corda.contracts.testing.fillWithSomeTestCash
@@ -238,11 +239,25 @@ class QueryCriteriaParserTest {
     fun VaultCustomQueryCriteriaSingleExpressionInterface() {
 
         // Commercial Paper
-        val expression = LogicalExpression(VaultSchema.VaultStates::stateStatus, Operator.EQUAL, Vault.StateStatus.UNCONSUMED)
-//        val expression = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
+//        val expression = LogicalExpression(VaultSchema.VaultStates::stateStatus, Operator.EQUAL, Vault.StateStatus.UNCONSUMED)
+        val expression = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
+        val attribute = findAttribute(expression.leftOperand)
 
         val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
-        val requeryExpr = criteriaParse.parse(criteria1)
+        criteria1?.let {
+            it.indexExpression?.let {
+                it.operator
+                it.leftOperand
+                it.rightOperand
+            }
+        }
+        val property = criteria1.indexExpression?.leftOperand!!
+        val attribute2 = findAttribute(property)
+
+        criteriaParse.parseMe(criteria1)
+        criteriaParse.parseMe2(expression)
+
+        val requeryExpr = criteriaParse.parseCriteria(criteria1)
         assertThat(requeryExpr.operator).isEqualTo(io.requery.query.Operator.EQUAL)
 
     }

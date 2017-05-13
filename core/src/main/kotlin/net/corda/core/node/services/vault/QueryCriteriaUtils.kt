@@ -37,7 +37,7 @@ sealed class Logical<L, R> : Condition<L, R>, AndOr<Logical<*, *>>
 
 class LogicalExpression<L, R>(leftOperand: L,
                               operator: Operator,
-                              rightOperand: R? = null) : Logical<L, R>() {
+                              rightOperand: R?) : Logical<L, R>() {
     init {
         if (rightOperand == null) {
             check(operator in setOf(Operator.NOT_NULL, Operator.IS_NULL),
