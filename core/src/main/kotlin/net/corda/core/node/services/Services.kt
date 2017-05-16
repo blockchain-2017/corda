@@ -188,9 +188,10 @@ interface VaultService {
      * Note: a default [PageSpecification] is applied to the query returning the 1st page (indexed from 0) with up to 200 entries.
      *       It is the responsibility of the Client to request further pages and/or specify a more suitable [PageSpecification].
      */
-    fun <T : ContractState> queryBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
+    fun <T : ContractState> _queryBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
                                     paging: PageSpecification = PageSpecification(),
-                                    sorting: Sort = Sort(emptySet())): Vault.Page<T>
+                                    sorting: Sort = Sort(emptySet()),
+                                    contractType: Class<out ContractState>): Vault.Page<T>
     /**
      * Generic vault query function which takes a [QueryCriteria] object to define filters,
      * optional [PageSpecification] and optional [Sort] modification criteria (default unsorted),
@@ -208,9 +209,10 @@ interface VaultService {
 
     // Note: cannot apply @JvmOverloads to interfaces nor interface implementations
     // Java Helpers
-    fun <T : ContractState> queryBy(criteria: QueryCriteria): Vault.Page<T> = queryBy(criteria, PageSpecification(), Sort(emptySet()))
-    fun <T : ContractState> queryBy(criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> = queryBy(criteria, paging, Sort(emptySet()))
-    fun <T : ContractState> queryBy(criteria: QueryCriteria, sorting: Sort): Vault.Page<T> = queryBy(criteria, PageSpecification(), sorting)
+    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria): Vault.Page<T> = _queryBy(criteria, PageSpecification(), Sort(emptySet()), contractType)
+    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> = _queryBy(criteria, paging, Sort(emptySet()), contractType)
+    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, sorting: Sort): Vault.Page<T> = _queryBy(criteria, PageSpecification(), sorting, contractType)
+    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> = _queryBy(criteria, paging, sorting, contractType)
 
     fun <T : ContractState> trackBy(criteria: QueryCriteria): Vault.PageAndUpdates<T> = trackBy(criteria, PageSpecification(), Sort(emptySet()))
     fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification): Vault.PageAndUpdates<T> = trackBy(criteria, paging, Sort(emptySet()))
@@ -361,6 +363,32 @@ inline fun <reified T : ContractState> VaultService.consumedStates(): Iterable<S
 inline fun <reified T : LinearState> VaultService.linearHeadsOfType() =
         states(setOf(T::class.java), EnumSet.of(Vault.StateStatus.UNCONSUMED))
                 .associateBy { it.state.data.linearId }.mapValues { it.value }
+
+// TODO: Remove this from the interface
+// @Deprecated("This function will be removed in a future milestone", ReplaceWith("queryBy(LinearStateQueryCriteria(dealPartyName = listOf(<String>)))"))
+inline fun <reified T : DealState> VaultService.dealsWith(party: AbstractParty) = linearHeadsOfType<T>().values.filter {
+    it.state.data.participants.any { it == party }
+}
+
+inline fun <reified T : ContractState> VaultService.queryBy(): Vault.Page<T> {
+    return _queryBy(QueryCriteria.VaultQueryCriteria(), PageSpecification(), Sort(emptySet()), T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultService.queryBy(criteria: QueryCriteria): Vault.Page<T> {
+    return _queryBy(criteria, PageSpecification(), Sort(emptySet()), T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultService.queryBy(criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> {
+    return _queryBy(criteria, paging, Sort(emptySet()), T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultService.queryBy(criteria: QueryCriteria, sorting: Sort): Vault.Page<T> {
+    return _queryBy(criteria, PageSpecification(), sorting, T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultService.queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> {
+    return _queryBy(criteria, paging, sorting, T::class.java)
+}
 
 class StatesNotAvailableException(override val message: String?, override val cause: Throwable? = null) : FlowException(message, cause) {
     override fun toString() = "Soft locking error: $message"

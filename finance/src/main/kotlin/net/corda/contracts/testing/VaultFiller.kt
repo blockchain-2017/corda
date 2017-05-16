@@ -15,6 +15,7 @@ import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.Vault
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
+import net.corda.core.utilities.CHARLIE_KEY
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import java.security.KeyPair
@@ -48,7 +49,7 @@ fun ServiceHub.fillWithSomeTestDeals(dealIds: List<String>,
 
 @JvmOverloads
 fun ServiceHub.fillWithSomeTestLinearStates(numberToCreate: Int,
-                                            uid: UniqueIdentifier = UniqueIdentifier(),
+                                            externalId: String? = null,
                                             participants: List<AbstractParty> = emptyList()) : Vault<LinearState> {
     val freshKey = keyManagementService.freshKey()
     val recipient = AnonymousParty(freshKey)
@@ -56,7 +57,7 @@ fun ServiceHub.fillWithSomeTestLinearStates(numberToCreate: Int,
     val transactions: List<SignedTransaction> = (1..numberToCreate).map {
         // Issue a Linear state
         val dummyIssue = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-            addOutputState(DummyLinearContract.State(linearId = uid, participants = participants.plus(recipient)))
+            addOutputState(DummyLinearContract.State(linearId = UniqueIdentifier(externalId), participants = participants.plus(recipient)))
             signWith(DUMMY_NOTARY_KEY)
         }
 
@@ -143,4 +144,48 @@ fun calculateRandomlySizedAmounts(howMuch: Amount<Currency>, min: Int, max: Int,
     amounts[0] += howMuch.quantity - amounts.sum()
 
     return amounts
+}
+
+
+fun <T : LinearState> ServiceHub.consume(states: List<StateAndRef<T>>) {
+
+
+
+    // Create a txn consuming different contract types
+    states.forEach {
+        val consumedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
+            addInputState(it)
+            signWith(DUMMY_NOTARY_KEY)
+        }.toSignedTransaction()
+
+        recordTransactions(consumedTx)
+    }
+}
+
+fun ServiceHub.consumeDeals(dealStates: List<StateAndRef<DealState>>) = consume(dealStates)
+
+//{
+//
+//    // Create a txn consuming different contract types
+//    dealStates.forEach {
+//        val consumedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
+//            addInputState(it)
+//            signWith(DUMMY_NOTARY_KEY)
+//        }.toSignedTransaction()
+//
+//        recordTransactions(consumedTx)
+//    }
+//}
+
+fun ServiceHub.consumeLinearStates(linearStates: List<StateAndRef<LinearState>>) = consume(linearStates)
+
+fun ServiceHub.consumeCash(amount: Amount<Currency>, to: PublicKey = CHARLIE_KEY.public) {
+
+    // A tx that spends our money.
+    val spendTX = TransactionType.General.Builder(DUMMY_NOTARY).apply {
+        vaultService.generateSpend(this, amount, to)
+        signWith(DUMMY_NOTARY_KEY)
+    }.toSignedTransaction(checkSufficientSignatures = false)
+
+    recordTransactions(spendTX)
 }

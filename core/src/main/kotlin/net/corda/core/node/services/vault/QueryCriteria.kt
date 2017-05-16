@@ -27,7 +27,7 @@ sealed class QueryCriteria {
             val stateRefs: List<StateRef>? = null,
             val contractStateTypes: Set<Class<out ContractState>>? = null,
             val notaryName: List<X500Name>? = null,
-            val includeSoftlockedStates: Boolean? = true,
+            val includeSoftlockedStates: Boolean = true,
             val timeCondition: Logical<TimeInstantType, Array<Instant>>? = null,
             val participantIdentities: List<X500Name>? = null) : QueryCriteria()
 
@@ -78,6 +78,17 @@ sealed class QueryCriteria {
         RECORDED,
         CONSUMED
     }
+
+   fun  <T: ContractState> withType(contractType: Class<T>) {
+       println("My type is: $contractType")
+    }
+
+//    fun  <T: ContractState> withType(contractType: Class<T>): QueryCriteria {
+//        if (this is VaultQueryCriteria)
+//            return VaultQueryCriteria().copy(contractStateTypes = this.contractStateTypes?.plus(contractType) ?: setOf(contractType))
+//        else
+//            return VaultQueryCriteria(contractStateTypes = setOf(contractType), status = Vault.StateStatus.UNCONSUMED)
+//    }
 }
 
 infix fun QueryCriteria.and(criteria: QueryCriteria): QueryCriteria = AndComposition(this, criteria)

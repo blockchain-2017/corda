@@ -1,5 +1,6 @@
 package net.corda.node.services.vault
 
+//import net.corda.node.services.contract.schemas.CommercialPaperSchemaV2
 import io.requery.kotlin.findAttribute
 import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.DUMMY_CASH_ISSUER
@@ -15,10 +16,8 @@ import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.TEST_TX_TIME
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV2
-import net.corda.node.services.vault.schemas.CommercialPaperSchemaV3
 import net.corda.node.services.contract.schemas.CommercialPaperSchemaV4
-import net.corda.node.services.vault.schemas.VaultSchema
+import net.corda.node.services.vault.schemas.CommercialPaperSchemaV3
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.CommercialPaperSchemaV1
@@ -34,7 +33,6 @@ import org.junit.Test
 import java.io.Closeable
 import java.time.temporal.ChronoUnit
 import java.util.*
-import kotlin.reflect.KMutableProperty1
 
 class QueryCriteriaParserTest {
 
@@ -48,8 +46,8 @@ class QueryCriteriaParserTest {
     lateinit var cashStates: List<StateRef>
 
     // Linear Ids
-    private val linearId1 = UniqueIdentifier("ID1")
-    private val linearId2 = UniqueIdentifier("ID2")
+    private val linearId1 = "ID1"
+    private val linearId2 = "ID2"
 
     // Deal Refs
     private val DEAL_REF1 = "123"
@@ -102,6 +100,13 @@ class QueryCriteriaParserTest {
     }
 
     @Test
+    fun `contract state types`() {
+        val contractStateTypes = criteriaParse.deriveContractTypes<Cash.State>()
+        assertThat(contractStateTypes).hasSize(1)
+        assertThat(contractStateTypes.first()).isEqualTo(Cash.State::class.java)
+    }
+
+    @Test
     fun parseVaultQueryCriteria() {
 
         val status = Vault.StateStatus.UNCONSUMED
@@ -145,7 +150,7 @@ class QueryCriteriaParserTest {
     @Test
     fun parseLinearStateQueryCriteria() {
 
-        val linearIds = listOf(linearId1)
+        val linearIds = linearStates.map { it.state.data.linearId }
         val criteria1 = QueryCriteria.LinearStateQueryCriteria(linearId = linearIds)
         val logicalCondition = criteriaParse.parse(criteria1)
         assertThat(logicalCondition.count()).isEqualTo(2)
@@ -223,16 +228,16 @@ class QueryCriteriaParserTest {
     }
 
     /** Commercial Paper V2 (Requery JPA) */
-    @Test
-    fun VaultCustomQueryCriteriaSingleExpressionJPA() {
-
-        // Commercial Paper
-        val expression = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::currency, Operator.EQUAL, USD.currencyCode)
-        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
-        criteriaParse.parse(criteria1)
-
-        fail()
-    }
+//    @Test
+//    fun VaultCustomQueryCriteriaSingleExpressionJPA() {
+//
+//        // Commercial Paper
+//        val expression = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::currency, Operator.EQUAL, USD.currencyCode)
+//        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
+//        criteriaParse.parse(criteria1)
+//
+//        fail()
+//    }
 
     /** Commercial Paper V3 (Requery Kotlin interface class) */
     @Test

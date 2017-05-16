@@ -29,6 +29,7 @@ import net.corda.core.node.services.unconsumedStates
 import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.node.services.vault.Sort
+import net.corda.core.node.services.vault.and
 import net.corda.core.serialization.*
 import net.corda.core.tee
 import net.corda.core.transactions.TransactionBuilder
@@ -68,7 +69,7 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         val stateRefCompositeColumn: RowExpression = RowExpression.of(listOf(VaultStatesEntity.TX_ID, VaultStatesEntity.INDEX))
     }
 
-    val configuration = RequeryConfiguration(dataSourceProperties)
+    val configuration = RequeryConfiguration(dataSourceProperties, true)
     val session = configuration.sessionForModel(Models.VAULT)
 
     private class InnerState {
@@ -224,51 +225,63 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         return stateAndRefs.associateBy({ it.ref }, { it.state })
     }
 
-    override fun <T : ContractState> queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> {
+    // companion object?
+    private val criteriaParser = QueryCriteriaParser()
 
-        val criteriaParser = QueryCriteriaParser()
+    //, contractClassType: Class<T>?
+    override fun <T : ContractState> _queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.Page<T> {
 
         val page =
-        session.withTransaction(TransactionIsolation.REPEATABLE_READ) {
+            session.withTransaction(TransactionIsolation.REPEATABLE_READ) {
 
-            val query = select(VaultSchema.VaultStates::class)
+                val query = select(VaultSchema.VaultStates::class)
 
-            val condition: Condition<*,*> = criteriaParser.parse(criteria)
-            query.where(condition)
-
-            // filter criteria
-//            query.where(VaultSchema.VaultStates::stateStatus `in` emptySet<Vault.StateStatus>())
-//                    .and(VaultSchema.VaultStates::contractStateClassName `in` emptySet<String>())
-//                    .or(VaultSchema.VaultStates::lockId.isNull())
-
-            // Pagination
-            query.limit((paging.pageNumber + 1) * paging.pageSize)
-            //query.offset()
-
-            // Sorting
-            val orderByExpressions : MutableList<OrderingExpression<*>> = mutableListOf()
-            sorting.columns.map {
-                orderByExpressions.add(criteriaParser.parseSorting(it))
-            }
-            query.orderBy(*orderByExpressions.toTypedArray())
-
-            // Execute
-            val boundedIterator = query.get().iterator(paging.pageNumber * paging.pageSize, paging.pageSize)
-            val statesAndRefs: MutableList<StateAndRef<*>> = mutableListOf()
-            val statesMeta: MutableList<Vault.StateMetadata> = mutableListOf()
-
-            var totalStates = 0
-            boundedIterator.asSequence()
-                    .forEach { it ->
-                        val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
-                        val state = it.contractState.deserialize<TransactionState<T>>(storageKryo())
-                        statesMeta.add(Vault.StateMetadata(stateRef, it.contractStateClassName, it.recordedTime, it.consumedTime, it.stateStatus, it.notaryName, it.notaryKey, it.lockId, it.lockUpdateTime))
-                        statesAndRefs.add(StateAndRef(state, stateRef))
-                        totalStates +=1
+                val contractTypes = criteriaParser.deriveContractTypes(contractType)
+                val globalCriteria =
+                    if (criteria is QueryCriteria.VaultQueryCriteria ) {
+                        val combinedContractStateTypes = criteria.contractStateTypes?.plus(contractTypes) ?: contractTypes
+                        criteria.copy(contractStateTypes = combinedContractStateTypes)
+                    }
+                    else {
+                        criteria.and(QueryCriteria.VaultQueryCriteria(status = Vault.StateStatus.UNCONSUMED, contractStateTypes = contractTypes))
                     }
 
-            Vault.Page(states = statesAndRefs, statesMetadata = statesMeta, pageable = paging, totalStatesAvailable = totalStates)
-        }
+                val condition: Condition<*,*> = criteriaParser.parse(globalCriteria)
+                query.where(condition)
+
+                // filter criteria
+    //            query.where(VaultSchema.VaultStates::stateStatus `in` emptySet<Vault.StateStatus>())
+    //                    .and(VaultSchema.VaultStates::contractStateClassName `in` emptySet<String>())
+    //                    .or(VaultSchema.VaultStates::lockId.isNull())
+
+                // Pagination
+                query.limit((paging.pageNumber + 1) * paging.pageSize)
+                //query.offset()
+
+                // Sorting
+                val orderByExpressions : MutableList<OrderingExpression<*>> = mutableListOf()
+                sorting.columns.map {
+                    orderByExpressions.add(criteriaParser.parseSorting(it))
+                }
+                query.orderBy(*orderByExpressions.toTypedArray())
+
+                // Execute
+                val boundedIterator = query.get().iterator(paging.pageNumber * paging.pageSize, paging.pageSize)
+                val statesAndRefs: MutableList<StateAndRef<*>> = mutableListOf()
+                val statesMeta: MutableList<Vault.StateMetadata> = mutableListOf()
+
+                var totalStates = 0
+                boundedIterator.asSequence()
+                        .forEach { it ->
+                            val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
+                            val state = it.contractState.deserialize<TransactionState<T>>(storageKryo())
+                            statesMeta.add(Vault.StateMetadata(stateRef, it.contractStateClassName, it.recordedTime, it.consumedTime, it.stateStatus, it.notaryName, it.notaryKey, it.lockId, it.lockUpdateTime))
+                            statesAndRefs.add(StateAndRef(state, stateRef))
+                            totalStates +=1
+                        }
+
+                Vault.Page(states = statesAndRefs, statesMetadata = statesMeta, pageable = paging, totalStatesAvailable = totalStates)
+            }
 
         return page as Vault.Page<T>
     }

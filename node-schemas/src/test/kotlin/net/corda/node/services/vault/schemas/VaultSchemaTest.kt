@@ -324,90 +324,90 @@ class VaultSchemaTest {
     /**
      *  Vault Schema: Linear States
      */
-    @Test
-    fun testQueryLinearStateByDealReference() {
-        val linearStateEntity = createLinearStateEntity(transaction!!.inputs[4])
-
-        data.invoke {
-            insert(linearStateEntity)
-            val result = select(VaultSchema.VaultLinearState::class)
-                    .where (VaultSchema.VaultLinearState::dealRef eq "DEAL#12345")
-            Assert.assertSame(linearStateEntity, result().first())
-        }
-    }
-
-    @Test
-    fun testQueryLinearStateByDealOwner() {
-        val linearStateEntity = createLinearStateEntity(transaction!!.inputs[4])
-
-        data.invoke {
-            insert(linearStateEntity)
-            val result = select(VaultSchema.VaultLinearState::class)
-                    .join(VaultSchema.VaultParty::class)
-                    .on(VaultSchema.VaultParty::name.eq("Alice"))
-            Assert.assertSame(linearStateEntity, result().first())
-        }
-    }
-
-    @Test
-    fun testQueryLinearStateByDealParties() {
-        val linearStateEntity1 = createLinearStateEntity(transaction!!.inputs[4])
-        val linearStateEntity2 = createLinearStateEntity(transaction!!.inputs[5])
-
-        // counterparty
-        val cpty = VaultPartyEntity()
-        cpty.name = BOB.name.commonName
-        cpty.key = BOB.owningKey.toBase58String()
-
-        data.invoke {
-            insert(linearStateEntity1)
-            insert(linearStateEntity2)
-            val query = select(VaultSchema.VaultLinearState::class)
-                    .join(VaultSchema.VaultParty::class)
-                    .on(VaultSchema.VaultParty::linearStateParties.eq(VaultSchema.VaultParty::id))
-//                    .where(VaultSchema.VaultLinearState::dealParties.eq(linearStateEntity1.dealParties))
-//                    .where(VaultSchema.VaultLinearState::dealParties `in` linearStateEntity1.dealParties)
-
-            val result = query.get()
-            println(result.count())
-            result.forEach {
-                println("${it.dealRef}, ${it.uuid}, ${it.dealParties.forEach { println(it.name)} }")
-            }
-            assertEquals(1, result.count())
-            Assert.assertSame(linearStateEntity1.dealParties, result.first().dealParties)
-        }
-    }
-
-    private fun createLinearStateEntity(stateAndRef: StateAndRef<*>): VaultLinearStateEntity {
-        val stateRef = stateAndRef.ref
-        val state = stateAndRef.state.data as DealState
-
-        // owner & deal party
-//        val party1 = VaultPartyEntity()
-//        party1.name = ALICE.name
-//        party1.key = ALICE.owningKey.toBase58String()
-
-        // deal counterparty
-//        val party2 = VaultPartyEntity()
-//        party2.name = BOB.name
-//        party2.key = BOB.owningKey.toBase58String()
-
-        return VaultLinearStateEntity().apply {
-//            txId = stateRef.txhash.toString()
-//            index = stateRef.index
-            uuid = state.linearId.id
-            externalId = state.linearId.externalId
-            dealRef = state.ref
-//            owner = party1
-//            dealParties = setOf(party1, party2)
-            dealParties = state.parties.map {
-                VaultPartyEntity().apply {
-                    name = it.toString()
-                    key = it.owningKey.toBase58String()
-                }
-            }.toSet()
-        }
-    }
+//    @Test
+//    fun testQueryLinearStateByDealReference() {
+//        val linearStateEntity = createLinearStateEntity(transaction!!.inputs[4])
+//
+//        data.invoke {
+//            insert(linearStateEntity)
+//            val result = select(VaultSchema.VaultLinearState::class)
+//                    .where (VaultSchema.VaultLinearState::dealRef eq "DEAL#12345")
+//            Assert.assertSame(linearStateEntity, result().first())
+//        }
+//    }
+//
+//    @Test
+//    fun testQueryLinearStateByDealOwner() {
+//        val linearStateEntity = createLinearStateEntity(transaction!!.inputs[4])
+//
+//        data.invoke {
+//            insert(linearStateEntity)
+//            val result = select(VaultSchema.VaultLinearState::class)
+//                    .join(VaultSchema.VaultParty::class)
+//                    .on(VaultSchema.VaultParty::name.eq("Alice"))
+//            Assert.assertSame(linearStateEntity, result().first())
+//        }
+//    }
+//
+//    @Test
+//    fun testQueryLinearStateByDealParties() {
+//        val linearStateEntity1 = createLinearStateEntity(transaction!!.inputs[4])
+//        val linearStateEntity2 = createLinearStateEntity(transaction!!.inputs[5])
+//
+//        // counterparty
+//        val cpty = VaultPartyEntity()
+//        cpty.name = BOB.name.commonName
+//        cpty.key = BOB.owningKey.toBase58String()
+//
+//        data.invoke {
+//            insert(linearStateEntity1)
+//            insert(linearStateEntity2)
+//            val query = select(VaultSchema.VaultLinearState::class)
+//                    .join(VaultSchema.VaultParty::class)
+//                    .on(VaultSchema.VaultParty::linearStateParties.eq(VaultSchema.VaultParty::id))
+////                    .where(VaultSchema.VaultLinearState::dealParties.eq(linearStateEntity1.dealParties))
+////                    .where(VaultSchema.VaultLinearState::dealParties `in` linearStateEntity1.dealParties)
+//
+//            val result = query.get()
+//            println(result.count())
+//            result.forEach {
+//                println("${it.dealRef}, ${it.uuid}, ${it.dealParties.forEach { println(it.name)} }")
+//            }
+//            assertEquals(1, result.count())
+//            Assert.assertSame(linearStateEntity1.dealParties, result.first().dealParties)
+//        }
+//    }
+//
+//    private fun createLinearStateEntity(stateAndRef: StateAndRef<*>): VaultLinearStateEntity {
+//        val stateRef = stateAndRef.ref
+//        val state = stateAndRef.state.data as DealState
+//
+//        // owner & deal party
+////        val party1 = VaultPartyEntity()
+////        party1.name = ALICE.name
+////        party1.key = ALICE.owningKey.toBase58String()
+//
+//        // deal counterparty
+////        val party2 = VaultPartyEntity()
+////        party2.name = BOB.name
+////        party2.key = BOB.owningKey.toBase58String()
+//
+//        return VaultLinearStateEntity().apply {
+////            txId = stateRef.txhash.toString()
+////            index = stateRef.index
+//            uuid = state.linearId.id
+//            externalId = state.linearId.externalId
+//            dealRef = state.ref
+////            owner = party1
+////            dealParties = setOf(party1, party2)
+//            dealParties = state.parties.map {
+//                VaultPartyEntity().apply {
+//                    name = it.toString()
+//                    key = it.owningKey.toBase58String()
+//                }
+//            }.toSet()
+//        }
+//    }
 
     /**
      *  Vault Schema: Transaction Notes

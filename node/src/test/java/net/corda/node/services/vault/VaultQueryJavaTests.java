@@ -116,7 +116,7 @@ public class VaultQueryJavaTests {
             Vault.StateStatus status = Vault.StateStatus.CONSUMED;
 
             VaultQueryCriteria criteria = new VaultQueryCriteria(status, null, contractStateTypes);
-            Vault.Page<ContractState> results = vaultSvc.queryBy(criteria);
+            Vault.Page<ContractState> results = vaultSvc.queryBy(Cash.State.class, criteria);
             // DOCEND VaultJavaQueryExample1
 
             assertThat(results.getStates()).hasSize(3);
@@ -129,8 +129,8 @@ public class VaultQueryJavaTests {
     public void consumedDealStatesPagedSorted() {
         transaction(database, tx -> {
 
-            UniqueIdentifier uid = new UniqueIdentifier();
-            fillWithSomeTestLinearStates(services, 10, uid);
+            Vault<LinearState> states = fillWithSomeTestLinearStates(services, 10, null);
+            UniqueIdentifier uid = states.getStates().iterator().next().component1().getData().getLinearId();
 
             List<String> dealIds = Arrays.asList("123", "456", "789");
             fillWithSomeTestDeals(services, dealIds);
@@ -151,7 +151,7 @@ public class VaultQueryJavaTests {
             PageSpecification pageSpec  = new PageSpecification(0, getMAX_PAGE_SIZE());
             Sort.SortColumn sortByUid = new Sort.SortColumn(VaultLinearStateEntity.UUID.getName(), Sort.Direction.DESC, Sort.NullHandling.NULLS_LAST);
             Sort sorting = new Sort(ImmutableSet.of(sortByUid));
-            Vault.Page<ContractState> results = vaultSvc.queryBy(compositeCriteria, pageSpec, sorting);
+            Vault.Page<ContractState> results = vaultSvc.queryBy(Cash.State.class, compositeCriteria, pageSpec, sorting);
             // DOCEND VaultJavaQueryExample2
 
             assertThat(results.getStates()).hasSize(4);
@@ -200,8 +200,8 @@ public class VaultQueryJavaTests {
     public void trackDealStatesPagedSorted() {
         transaction(database, tx -> {
 
-            UniqueIdentifier uid = new UniqueIdentifier();
-            fillWithSomeTestLinearStates(services, 10, uid);
+            Vault<LinearState> states = fillWithSomeTestLinearStates(services, 10, null);
+            UniqueIdentifier uid = states.getStates().iterator().next().component1().getData().getLinearId();
 
             List<String> dealIds = Arrays.asList("123", "456", "789");
             fillWithSomeTestDeals(services, dealIds);
@@ -269,9 +269,9 @@ public class VaultQueryJavaTests {
     public void consumedStatesForLinearIdDeprecated() {
         transaction(database, tx -> {
 
-            UniqueIdentifier trackUid = new UniqueIdentifier();
-            fillWithSomeTestLinearStates(services, 1, trackUid);
-            fillWithSomeTestLinearStates(services, 4, new UniqueIdentifier());
+            Vault<LinearState> states = fillWithSomeTestLinearStates(services, 1, null);
+            UniqueIdentifier trackUid = states.getStates().iterator().next().component1().getData().getLinearId();
+            fillWithSomeTestLinearStates(services, 4,null);
 
             // DOCSTART VaultDeprecatedJavaQueryExample2
             @SuppressWarnings("unchecked")
