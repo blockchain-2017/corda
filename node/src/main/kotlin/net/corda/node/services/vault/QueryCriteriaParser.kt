@@ -13,18 +13,16 @@ import net.corda.core.flows.FlowException
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.Logical
+import net.corda.core.schemas.StatePersistable
 import net.corda.core.utilities.loggerFor
-import net.corda.node.services.vault.schemas.VaultSchema
-import net.corda.node.services.vault.schemas.VaultStatesEntity
+import net.corda.node.services.vault.schemas.*
+import org.bouncycastle.asn1.x500.X500Name
 import java.time.Instant
 import java.util.*
 import kotlin.reflect.KMutableProperty1
 import kotlin.reflect.KProperty1
 
-//inline fun <reified T : ContractState> QueryCriteriaParser.parse(criteria: QueryCriteria) =
-//    parse(criteria, deriveContractTypes<T>())
-
-class QueryCriteriaParser {
+class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
 
     private companion object {
         val log = loggerFor<QueryCriteriaParser>()
@@ -35,12 +33,7 @@ class QueryCriteriaParser {
 
     fun parse(criteria: QueryCriteria) : LogicalCondition<*, *> {
 
-//        if (criteria is QueryCriteria.VaultQueryCriteria ) {
-//            criteria.contractStateTypes?.plus(contractTypes) ?: setOf(contractTypes)
-//            criteria.status?.let { Vault.StateStatus.UNCONSUMED }
-//        }
-
-        val whereClause : LogicalCondition<*, *> =
+        val conditions : LogicalCondition<*, *> =
 
             when (criteria) {
                 is QueryCriteria.VaultQueryCriteria -> {
@@ -75,7 +68,7 @@ class QueryCriteriaParser {
                     throw InvalidQueryCriteriaException(criteria::class.java)
             }
 
-        return whereClause
+        return conditions
     }
 
     inline fun <reified T: ContractState> deriveContractTypes(): Set<Class<out ContractState>> = deriveContractTypes(T::class.java)
@@ -88,17 +81,11 @@ class QueryCriteriaParser {
     }
 
     fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): LogicalCondition<*, *> {
-        criteria.status
-        criteria.contractStateTypes
-        criteria.includeSoftlockedStates
-        criteria.notaryName
-        criteria.participantIdentities
-        criteria.stateRefs
-        criteria.timeCondition
 
         // state status
         val attribute = findAttribute(VaultSchema.VaultStates::stateStatus)
         val attributeBuilder = AttributeBuilder<VaultSchema.VaultStates, Vault.StateStatus>(attribute.name, attribute.classType)
+        println(attribute.declaringType.baseType)
         val queryAttribute = attributeBuilder.build()
         var chainedConditions : LogicalCondition<*, *> =
                 if (criteria.status == Vault.StateStatus.ALL)
@@ -107,9 +94,12 @@ class QueryCriteriaParser {
                     queryAttribute.equal(criteria.status)
 
         // contract State Types
-        criteria.contractStateTypes?.let {
-            if (!it.map { it.name }.contains(ContractState::class.java.name))
-                chainedConditions = chainedConditions.and(VaultSchema.VaultStates::contractStateClassName `in` (it.map { it.name }))
+        criteria.contractStateTypes?.filter { it.name != ContractState::class.java.name }?.let {
+            val interfaces = it.flatMap { contractTypeMappings[it.name] ?: emptyList() }
+            val concrete = it.filter { !it.isInterface }.map { it.name }
+            val all = interfaces.plus(concrete)
+            if (all.isNotEmpty())
+                chainedConditions = chainedConditions.and(VaultSchema.VaultStates::contractStateClassName `in` (all))
         }
 
         // soft locking
@@ -120,27 +110,18 @@ class QueryCriteriaParser {
         criteria.notaryName?.let {
             val attributeNotary = findAttribute(VaultSchema.VaultStates::notaryName)
             val queryAttributeNotary = AttributeBuilder<VaultSchema.VaultStates, String>(attributeNotary.name, attributeNotary.classType).build()
-            chainedConditions = chainedConditions.and(queryAttributeNotary.`in`(criteria.notaryName.toString()))
+            val notaryNames = (criteria.notaryName as List<X500Name>).map { it.toString() }  // why does this need a cast?
+            chainedConditions = chainedConditions.and(queryAttributeNotary.`in`(notaryNames))
         }
 
         // state references
         criteria.stateRefs?.let {
             val stateRefArgs = stateRefArgs(criteria.stateRefs!!)
             chainedConditions = chainedConditions.and(stateRefCompositeColumn.`in`(stateRefArgs))
-//            it.forEach {
-//                val attributeTxId = findAttribute(VaultSchema.VaultStates::txId)
-//                val attributeIndex = findAttribute(VaultSchema.VaultStates::index)
-//                chainedConditions = chainedConditions.and(VaultSchema.VaultStates::txId eq it.txhash.toString())
-//                chainedConditions = chainedConditions.and(VaultSchema.VaultStates::index eq it.index)
-//            }
         }
 
-        // time constraints (recorded, consumed, lockUpdate)
+        // time constraints (recorded, consumed)
         if (criteria.timeCondition != null) {
-//            val attributeTimestamp = findAttribute(VaultSchema.VaultStates::consumedTime)
-//            val attributeTimestamp = findAttribute(VaultSchema.VaultStates::recordedTime)
-//            val attributeTimestamp = findAttribute(VaultSchema.VaultStates::lockUpdateTime)
-
             val timeCondition = criteria.timeCondition as LogicalExpression
             val timeInstantType = timeCondition.leftOperand
             val timeOperator = timeCondition.operator
@@ -162,7 +143,6 @@ class QueryCriteriaParser {
     }
 
     private fun parseOperator(property: KProperty1<VaultSchema.VaultStates, Instant?>, operator: Operator, value: Array<Instant>): io.requery.kotlin.Logical<out Expression<Instant?>, out Any?> {
-
         val condition =
             when (operator) {
                 Operator.EQUAL -> property.eq(value[0])
@@ -172,22 +152,19 @@ class QueryCriteriaParser {
                 Operator.LESS_THAN -> property.lt(value[0])
                 Operator.LESS_THAN_OR_EQUAL -> property.lte(value[0])
                 Operator.BETWEEN -> property.between(value[0],value[1])
-
                 else -> throw InvalidQueryOperatorException(operator)
             }
-
         return condition
     }
 
     fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): LogicalCondition<*, *> {
-        criteria.linearId
-        criteria.dealRef
-        criteria.dealPartyName
 
         // UNCONSUMED by default
         val attribute = findAttribute(VaultSchema.VaultStates::stateStatus)
         val attributeBuilder = AttributeBuilder<VaultSchema.VaultStates, Vault.StateStatus>(attribute.name, attribute.classType)
         val queryAttribute = attributeBuilder.build()
+        val entityClass = queryAttribute.elementClass
+
         var logicalCondition: LogicalCondition<*, *> = queryAttribute.equal(Vault.StateStatus.UNCONSUMED)
 
         // parse linearId
@@ -206,8 +183,6 @@ class QueryCriteriaParser {
                     val logicalCondition2 = queryAttribute2.`in`(criteria.linearId?.map { it.id })
                     logicalCondition1.and(logicalCondition2)
                 })
-
-
 
         // deal ref
         logicalCondition?.and(
@@ -255,6 +230,7 @@ class QueryCriteriaParser {
         val attribute = findAttribute(VaultSchema.VaultFungibleState::quantity)
         val attributeBuilder = AttributeBuilder<VaultSchema.VaultFungibleState, Long>(attribute.name, attribute.classType)
         val queryAttribute = attributeBuilder.build()
+        val entityClass = attribute.elementClass
 
         val quantityExpr: Logical<*, Long>? = criteria.quantity
         quantityExpr?.let {
@@ -266,11 +242,8 @@ class QueryCriteriaParser {
             return logicalCondition
         }
 
-//        val logicalCondition = queryAttribute.equal(criteria.quantity)
-//        val attributeDelegate = AttributeDelegate(queryAttribute)
-//
-//        return criteria.quantity
-        throw RuntimeException()
+        throw UnsupportedQueryException("Specified criteria: $criteria")
+
     }
 
     inline fun <reified L : Any, R>  parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>, R>): LogicalCondition<*, *> {
@@ -311,6 +284,10 @@ class QueryCriteriaParser {
 
         val attribute = AttributeBuilder<VaultSchema.VaultStates, String>(sortColumn.columnName, sortColumn.columnName.javaClass)
 
+//        val attribute = findAttribute(sortColumn.columnName)
+//        val attributeBuilder = AttributeBuilder<Any, R>(attribute.name, attribute.classType)
+//        val queryAttribute = attributeBuilder.build()
+
         val orderingExpression =
                 when (sortColumn.direction) {
                     Sort.Direction.ASC -> if (sortColumn.nullHandling == Sort.NullHandling.NULLS_FIRST)
@@ -328,7 +305,72 @@ class QueryCriteriaParser {
     private fun stateRefArgs(stateRefs: List<StateRef>): List<List<Any>> {
         return stateRefs.map { listOf("'${it.txhash}'", it.index) }
     }
+
+    fun deriveEntities(criteria: QueryCriteria): List<Class<out StatePersistable>> {
+
+        val entityClasses : MutableSet<Class<out StatePersistable>> = mutableSetOf()
+
+        when (criteria) {
+            is QueryCriteria.VaultQueryCriteria -> println("SKIP")
+                // entityClasses.add(VaultSchema.VaultStates::class.java)
+
+            is QueryCriteria.FungibleAssetQueryCriteria ->
+                entityClasses.add(CashSchemaV2.PersistentCashState2::class.java)
+
+            is QueryCriteria.LinearStateQueryCriteria -> {
+                entityClasses.add(DummyLinearStateSchemaV2.PersistentDummyLinearState2::class.java)
+            }
+
+            is QueryCriteria.VaultCustomQueryCriteria<*, *> -> {
+                entityClasses.add(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
+            }
+
+            is QueryCriteria.AndComposition -> {
+                println("AND")
+                entityClasses.addAll(deriveEntities(criteria.a))
+                entityClasses.addAll(deriveEntities(criteria.b))
+            }
+            is QueryCriteria.OrComposition -> {
+                println("OR")
+                entityClasses.addAll(deriveEntities(criteria.a))
+                entityClasses.addAll(deriveEntities(criteria.b))
+            }
+            else ->
+                throw InvalidQueryCriteriaException(criteria::class.java)
+        }
+
+        return listOf(VaultSchema.VaultStates::class.java).plus(entityClasses.toList())
+    }
 }
+
+inline fun <reified L : Any, R> resolveEntityType(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>,*>): Class<L> {
+
+    val logicalExpr = criteria.indexExpression
+    val property = logicalExpr?.leftOperand!!
+    val attribute = findAttribute(property)
+    println(attribute)
+
+    return L::class.java
+}
+//inline fun <reified L : Any, R>  resolveEntityType(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>, R>): Class<Persistable> {
+//
+//    val logicalExpr = criteria.indexExpression
+//    val property = logicalExpr?.leftOperand!!
+//
+//    val attribute = findAttribute(property)
+//    val attributeBuilder = AttributeBuilder<Any, R>(attribute.name, attribute.classType)
+//    val queryAttribute = attributeBuilder.build()
+//
+//    val logicalCondition =
+//            when (logicalExpr?.operator) {
+//                Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand)
+//                else -> {
+//                    throw InvalidQueryOperatorException(logicalExpr!!.operator)
+//                }
+//            }
+//
+//    return logicalCondition
+//}
 
 fun  <L, R> LogicalCondition<L, R>.count(): Int {
     var size = 1
@@ -344,6 +386,7 @@ fun  <L, R> LogicalCondition<L, R>.count(): Int {
     return size
 }
 
+class VaultQueryException(description: String) : FlowException("Vault query: $description.")
 class InvalidQueryCriteriaException(criteriaMissing: Class<out QueryCriteria>) : FlowException("No query criteria specified for ${criteriaMissing.simpleName}.")
 class InvalidQueryOperatorException(operator: Operator) : FlowException("Invalid query operator: $operator.")
 class UnsupportedQueryException(description: String) : FlowException("Unsupported query: $description.")

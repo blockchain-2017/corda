@@ -1,6 +1,7 @@
 package net.corda.core.node.services.vault
 
 import net.corda.core.serialization.CordaSerializable
+import kotlin.reflect.KProperty1
 
 @CordaSerializable
 enum class Operator {
@@ -81,7 +82,7 @@ val MAX_PAGE_SIZE = 512
 
 /**
  * PageSpecification allows specification of a page number (starting from 0 as default) and page size (defaulting to
- * [DEFAULT_PAGE_SIZE] with a maximum page size of [DEFAULT_PAGE_SIZE]
+ * [DEFAULT_PAGE_SIZE] with a maximum page size of [MAX_PAGE_SIZE]
  */
 @CordaSerializable
 data class PageSpecification(val pageNumber: Int = DEFAULT_PAGE_NUM, val pageSize: Int = DEFAULT_PAGE_SIZE)
@@ -107,7 +108,9 @@ data class Sort(val columns: Collection<SortColumn>) {
      * (for example, [VaultSchema.VaultStates::txId.name])
      */
     @CordaSerializable
-    data class SortColumn(val columnName: String, val direction: Sort.Direction = Sort.Direction.ASC,
+    data class SortColumn(val columnName: String,
+//                               val columnName: KProperty1<T,out R>,
+                          val direction: Sort.Direction = Sort.Direction.ASC,
                           val nullHandling: Sort.NullHandling = if (direction == Sort.Direction.ASC) Sort.NullHandling.NULLS_LAST else Sort.NullHandling.NULLS_FIRST)
 }
 

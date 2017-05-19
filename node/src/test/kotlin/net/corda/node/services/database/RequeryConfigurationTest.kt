@@ -125,6 +125,34 @@ class RequeryConfigurationTest {
     }
 
     @Test
+    fun `bounded iteration`() {
+
+        // insert 100 entities
+        database.transaction {
+            requerySession.withTransaction {
+                for (i in 1..100) {
+                    val txn = newTransaction(i)
+                    insert(createVaultStateEntity(txn))
+                }
+            }
+        }
+
+        // query entities 41..45
+        database.transaction {
+            requerySession.withTransaction {
+                // Note: cannot specify a limit explicitly when using iterator skip & take
+                val query = select(VaultSchema.VaultStates::class) //limit 50
+                val count = query.get().count()
+//                Assertions.assertThat(count).isEqualTo(50)
+                Assertions.assertThat(count).isEqualTo(100)
+                val result = query.get().iterator(40, 5)
+//                result.asSequence().iterator().forEach { println(it.index) }
+                Assertions.assertThat(result.asSequence().count()).isEqualTo(5)
+            }
+        }
+    }
+
+    @Test
     fun `test calling an arbitrary JDBC native query`() {
 
         val txn = newTransaction()
@@ -185,9 +213,9 @@ class RequeryConfigurationTest {
         }
     }
 
-    private fun newTransaction(): SignedTransaction {
+    private fun newTransaction(index: Int = 0): SignedTransaction {
         val wtx = WireTransaction(
-                inputs = listOf(StateRef(SecureHash.randomSHA256(), 0)),
+                inputs = listOf(StateRef(SecureHash.randomSHA256(), index)),
                 attachments = emptyList(),
                 outputs = emptyList(),
                 commands = emptyList(),

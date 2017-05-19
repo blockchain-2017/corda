@@ -187,6 +187,7 @@ interface VaultService {
      *
      * Note: a default [PageSpecification] is applied to the query returning the 1st page (indexed from 0) with up to 200 entries.
      *       It is the responsibility of the Client to request further pages and/or specify a more suitable [PageSpecification].
+     * Note2: you can also annotate entity fields with JPA OrderBy annotation to achieve the same effect as explicit sorting
      */
     fun <T : ContractState> _queryBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
                                     paging: PageSpecification = PageSpecification(),

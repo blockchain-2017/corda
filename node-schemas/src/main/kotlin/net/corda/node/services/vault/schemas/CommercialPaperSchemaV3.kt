@@ -2,6 +2,7 @@ package net.corda.node.services.vault.schemas
 
 import io.requery.*
 import net.corda.core.schemas.MappedSchema
+import net.corda.core.schemas.requery.Requery
 import net.corda.node.services.contract.schemas.CommercialPaperSchema
 import java.time.Instant
 
@@ -11,7 +12,7 @@ import java.time.Instant
 object CommercialPaperSchemaV3 : MappedSchema(schemaFamily = CommercialPaperSchema.javaClass, version = 3, mappedTypes = listOf(PersistentCommercialPaperState3::class.java)) {
     @Entity(model = "vault")
     @Table(name = "cp_states")
-    interface PersistentCommercialPaperState3 : Persistable {
+    interface PersistentCommercialPaperState3 : Requery.PersistentState {
         @get:Column(name = "issuance_key")
         var issuanceParty: String
 

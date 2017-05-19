@@ -2,10 +2,8 @@ package net.corda.node.services.vault.schemas
 
 import io.requery.Persistable
 import io.requery.TransactionIsolation
-import io.requery.kotlin.`in`
-import io.requery.kotlin.eq
-import io.requery.kotlin.invoke
-import io.requery.kotlin.isNull
+import io.requery.kotlin.*
+import io.requery.meta.AttributeBuilder
 import io.requery.query.RowExpression
 import io.requery.rx.KotlinRxEntityStore
 import io.requery.sql.*
@@ -35,7 +33,6 @@ import org.junit.Before
 import org.junit.Test
 import rx.Observable
 import java.time.Instant
-import java.util.*
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
@@ -44,6 +41,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import net.corda.contracts.testing.DummyLinearContract
 import net.corda.core.utilities.*
+import kotlin.collections.ArrayList
+import kotlin.reflect.KMutableProperty1
+import kotlin.reflect.KProperty1
 
 class VaultSchemaTest {
 
@@ -59,7 +59,7 @@ class VaultSchemaTest {
     fun setup() {
         val dataSource = JdbcDataSource()
         dataSource.setURL("jdbc:h2:mem:vault_persistence;DB_CLOSE_ON_EXIT=FALSE;DB_CLOSE_DELAY=-1")
-        val configuration = KotlinConfiguration(dataSource = dataSource, model = Models.VAULT, mapping = setupCustomMapping())
+        val configuration = KotlinConfiguration(dataSource = dataSource, model = Models.VAULT, mapping = setupCustomMapping(), useDefaultLogging = true)
         instance = KotlinEntityDataStore<Persistable>(configuration)
         oinstance = KotlinRxEntityStore(KotlinEntityDataStore<Persistable>(configuration))
         val tables = SchemaModifier(configuration)
@@ -306,6 +306,129 @@ class VaultSchemaTest {
         }
     }
 
+    @Test
+    fun testDistinctContractStateTypes() {
+        val txn = createTxnWithTwoStateTypes()
+        dummyStatesInsert(txn)
+
+        data.invoke {
+            transaction!!.inputs.forEach {
+                val stateEntity = createStateEntity(it)
+                insert(stateEntity)
+            }
+
+            val query = select(VaultSchema.VaultStates::contractStateClassName).distinct()
+            val results = query.get()
+
+            Assert.assertSame(5, results.count())
+        }
+    }
+
+    @Test
+    fun testJoinOnPrimaryKey() {
+
+        val linearStateAndRef = transaction!!.inputs[4] as StateAndRef<LinearState>
+        val stateEntity = createStateEntity(linearStateAndRef)
+        val linearStateEntity = createLinearStateEntity(linearStateAndRef)
+        val linearState = linearStateAndRef.state.data
+
+        data.invoke {
+            insert(stateEntity)
+            insert(linearStateEntity)
+            val query = select(VaultSchema.VaultStates::class)
+                        .join(VaultSchema.VaultLinearState::class)
+                            .on((VaultSchema.VaultStates::txId.eq(VaultSchema.VaultLinearState::txId))
+                              .and(VaultSchema.VaultStates::index.eq(VaultSchema.VaultLinearState::index)))
+
+            if (linearState.linearId.externalId == null)
+                query.where(VaultSchema.VaultLinearState::externalId.isNull())
+            else
+                query.where(VaultSchema.VaultLinearState::externalId eq linearState.linearId.externalId)
+
+            query.where(VaultSchema.VaultLinearState::uuid eq linearState.linearId.id)
+
+            Assert.assertSame(stateEntity, query().first())
+        }
+    }
+
+    @Test
+    fun testJoinOnPKForAnyTwoStateTables() {
+
+        // setUp
+        val linearStateAndRef = transaction!!.inputs[4] as StateAndRef<LinearState>
+        val stateEntity = createStateEntity(linearStateAndRef)
+        val linearStateEntity = createLinearStateEntity(linearStateAndRef)
+
+        // insert
+        data.invoke {
+            insert(stateEntity)
+            insert(linearStateEntity)
+        }
+
+        // select query with join
+//        val table1 = VaultSchema.VaultStates::class.java
+//        val table2 = VaultSchema.VaultLinearState::class.java
+        val table1txId = VaultSchema.VaultStates::txId
+        val table2txId = VaultSchema.VaultLinearState::txId
+        val table1index = VaultSchema.VaultStates::index
+        val table2index = VaultSchema.VaultLinearState::index
+
+        val results = queryWithJoin(table1txId, table2txId, table1index, table2index)
+        Assert.assertSame(stateEntity, results)
+    }
+
+    private inline fun <reified F : Persistable, reified S : Persistable> queryWithJoin(//table1: Class<F>,
+                                                                                        //table2: Class<S>,
+                                                                                        table1txId: KProperty1<F, *>,
+                                                                                        table2txId: KProperty1<S, *>,
+                                                                                        table1index: KProperty1<F, *>,
+                                                                                        table2index: KProperty1<S, *>) : F {
+        println("${F::class} has members ${F::class.members.map { it.name }}")
+        val table1 = F::class
+        val table2 = S::class
+
+        val txId1 = F::class.members.filter { it.name == "txId"}.first()
+        val txId2 = S::class.members.filter { it.name == "txId"}.first()
+        println(txId1)
+        println(txId2)
+
+        val idx1 = F::class.members.filter { it.name == "index"}.first()
+        val idx2 = S::class.members.filter { it.name == "index"}.first()
+        println(idx1)
+        println(idx2)
+
+        val txIdVSAttribute = VaultSchema.VaultStates::txId
+        val txIdVLSAttribute = VaultSchema.VaultLinearState::txId
+
+        val indexVSAttribute = VaultSchema.VaultStates::index
+        val indexVLSAttribute = VaultSchema.VaultLinearState::index
+
+        val attribute1 = findAttribute(txIdVSAttribute)
+        val attributeBuilder1 = AttributeBuilder<F, String>(attribute1.name, attribute1.classType)
+        val queryAttribute1 = attributeBuilder1.build()
+
+        val attribute2 = findAttribute(txIdVLSAttribute)
+        val attributeBuilder2 = AttributeBuilder<S, String>(attribute2.name, attribute2.classType)
+        val queryAttribute2 = attributeBuilder2.build()
+
+        val condition1 = table1txId.eq(table2txId)
+        val condition2 = table1index.eq(table2index)
+
+        val results =
+            data.invoke {
+                val query = select(table1).join(table2).on(condition1.and(condition2))
+                query.get().first()
+            }
+
+//        val query = select(VaultSchema.VaultStates::class)
+//                .join(VaultSchema.VaultLinearState::class)
+//                .on((VaultSchema.VaultStates::txId.eq(VaultSchema.VaultLinearState::txId))
+//                        .and(VaultSchema.VaultStates::index.eq(VaultSchema.VaultLinearState::index)))
+
+        return results
+    }
+
+
     private fun createStateEntity(stateAndRef: StateAndRef<*>, idx: Int? = null, txHash: String? = null): VaultStatesEntity {
         val stateRef = stateAndRef.ref
         val state = stateAndRef.state
@@ -321,9 +444,23 @@ class VaultSchemaTest {
         }
     }
 
+    private fun createLinearStateEntity(stateAndRef: StateAndRef<*>): VaultLinearStateEntity {
+        val stateRef = stateAndRef.ref
+        val state = stateAndRef.state.data as LinearState
+
+        return VaultLinearStateEntity().apply {
+            txId = stateRef.txhash.toString()
+            index = stateRef.index
+            uuid = state.linearId.id
+            externalId = state.linearId.externalId
+//            owner = party1
+        }
+    }
+
     /**
      *  Vault Schema: Linear States
      */
+
 //    @Test
 //    fun testQueryLinearStateByDealReference() {
 //        val linearStateEntity = createLinearStateEntity(transaction!!.inputs[4])
@@ -378,22 +515,24 @@ class VaultSchemaTest {
 //        }
 //    }
 //
-//    private fun createLinearStateEntity(stateAndRef: StateAndRef<*>): VaultLinearStateEntity {
+
+
+//    private fun createDealStateEntity(stateAndRef: StateAndRef<*>): VaultDealStateEntity {
 //        val stateRef = stateAndRef.ref
 //        val state = stateAndRef.state.data as DealState
 //
-//        // owner & deal party
-////        val party1 = VaultPartyEntity()
-////        party1.name = ALICE.name
-////        party1.key = ALICE.owningKey.toBase58String()
-//
-//        // deal counterparty
-////        val party2 = VaultPartyEntity()
-////        party2.name = BOB.name
-////        party2.key = BOB.owningKey.toBase58String()
-//
-//        return VaultLinearStateEntity().apply {
-////            txId = stateRef.txhash.toString()
+        // owner & deal party
+//        val party1 = VaultPartyEntity()
+//        party1.name = ALICE.name
+//        party1.key = ALICE.owningKey.toBase58String()
+
+        // deal counterparty
+//        val party2 = VaultPartyEntity()
+//        party2.name = BOB.name
+//        party2.key = BOB.owningKey.toBase58String()
+
+//        return VaultDealStateEntity().apply {
+//            //            txId = stateRef.txhash.toString()
 ////            index = stateRef.index
 //            uuid = state.linearId.id
 //            externalId = state.linearId.externalId

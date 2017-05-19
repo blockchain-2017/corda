@@ -77,17 +77,17 @@ object VaultSchema {
 
     @Table(name = "vault_linear_states")
     @Entity(model = "vault")
-    interface VaultLinearState : Persistable {
+    interface VaultLinearState : Requery.PersistentState {
 
         // Temporary PK used to successfully test 1:M with VaultParty entity
-        @get:Key
-        @get:Generated
-        @get:Column(name = "id")
-        var id: Int
+//        @get:Key
+//        @get:Generated
+//        @get:Column(name = "id")
+//        var id: Int
 
         /** [ContractState] attributes */
-        @get:OneToMany(mappedBy = "linear_state_parties")
-        var participants: Set<VaultParty>
+//        @get:OneToMany(mappedBy = "linear_state_parties")
+//        var participants: Set<VaultParty>
 
         /**
          * [LinearState] attributes

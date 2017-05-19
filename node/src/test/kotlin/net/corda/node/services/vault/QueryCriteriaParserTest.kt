@@ -17,9 +17,13 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.TEST_TX_TIME
 import net.corda.node.services.contract.schemas.CommercialPaperSchemaV4
+import net.corda.node.services.vault.schemas.CashSchemaV2
 import net.corda.node.services.vault.schemas.CommercialPaperSchemaV3
+import net.corda.node.services.vault.schemas.DummyLinearStateSchemaV2
+import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
+import net.corda.schemas.CashSchemaV1
 import net.corda.schemas.CommercialPaperSchemaV1
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
@@ -82,12 +86,12 @@ class QueryCriteriaParserTest {
                     .plus(services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (BOC.ref(1)), issuerKey = BOC_KEY, ref = OpaqueBytes.of(1)).states.map { it.ref })
             linearStates = services.fillWithSomeTestLinearStates(1, linearId1, participants = listOf(MEGA_CORP_PUBKEY, MINI_CORP_PUBKEY)).states.toList()
                     .plus(services.fillWithSomeTestLinearStates(2, linearId2, participants = listOf(MEGA_CORP_PUBKEY, MINI_CORP_PUBKEY)).states.toList())
-            dealStates = services.fillWithSomeTestDeals(listOf(DEAL_REF1), 3, parties = listOf(MEGA_CORP.toAnonymous(), BIG_CORP.toAnonymous())).states.toList()
+            dealStates = services.fillWithSomeTestDeals(listOf(DEAL_REF1), parties = listOf(MEGA_CORP.toAnonymous(), BIG_CORP.toAnonymous())).states.toList()
                    .plus(services.fillWithSomeTestDeals(listOf(DEAL_REF2, DEAL_REF3), parties = listOf(BIG_CORP.toAnonymous(), MINI_CORP.toAnonymous())).states)
 
         }
 
-        criteriaParse = QueryCriteriaParser()
+        criteriaParse = QueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)))
     }
 
     @After
@@ -104,6 +108,35 @@ class QueryCriteriaParserTest {
         val contractStateTypes = criteriaParse.deriveContractTypes<Cash.State>()
         assertThat(contractStateTypes).hasSize(1)
         assertThat(contractStateTypes.first()).isEqualTo(Cash.State::class.java)
+    }
+
+    @Test
+    fun `derive contract state entities`() {
+
+        // Fungible criteria (Cash)
+        val criteriaFungible = QueryCriteria.FungibleAssetQueryCriteria()
+        val contractStateEntitiesFungible = criteriaParse.deriveEntities(criteriaFungible)
+        assertThat(contractStateEntitiesFungible).hasSize(2)
+        assertThat(contractStateEntitiesFungible[0]).isEqualTo(VaultSchema.VaultStates::class.java)
+        assertThat(contractStateEntitiesFungible[1]).isEqualTo(CashSchemaV2.PersistentCashState2::class.java)
+
+        // Linear State (DummyLinearState)
+        val criteria = QueryCriteria.LinearStateQueryCriteria()
+        val contractStateEntities = criteriaParse.deriveEntities(criteria)
+        assertThat(contractStateEntities).hasSize(2)
+        assertThat(contractStateEntities[0]).isEqualTo(VaultSchema.VaultStates::class.java)
+        assertThat(contractStateEntities[1]).isEqualTo(DummyLinearStateSchemaV2.PersistentDummyLinearState2::class.java)
+
+        // Commercial Paper
+        val expressionCustom = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
+
+        val criteriaCustom = QueryCriteria.VaultCustomQueryCriteria(expressionCustom)
+        val contractStateEntitiesCustom = criteriaParse.deriveEntities(criteriaCustom)
+        assertThat(contractStateEntitiesCustom).hasSize(2)
+        assertThat(contractStateEntitiesCustom[0]).isEqualTo(VaultSchema.VaultStates::class.java)
+        assertThat(contractStateEntitiesCustom[1]).isEqualTo(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
+
+
     }
 
     @Test
