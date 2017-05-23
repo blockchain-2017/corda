@@ -50,6 +50,7 @@ import net.corda.node.services.statemachine.flowVersionAndInitiatingClass
 import net.corda.node.services.transactions.*
 import net.corda.node.services.vault.CashBalanceAsMetricsObserver
 import net.corda.node.services.vault.NodeVaultService
+import net.corda.node.services.vault.RequeryVaultQueryServiceImpl
 import net.corda.node.services.vault.VaultSoftLockManager
 import net.corda.node.utilities.AddOrRemove.ADD
 import net.corda.node.utilities.AffinityExecutor
@@ -119,6 +120,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
         override val networkMapCache: NetworkMapCacheInternal get() = netMapCache
         override val storageService: TxWritableStorageService get() = storage
         override val vaultService: VaultService get() = vault
+        override val vaultQueryService: VaultQueryService get() = vaultQuery
         override val keyManagementService: KeyManagementService get() = keyManagement
         override val identityService: IdentityService get() = identity
         override val schedulerService: SchedulerService get() = scheduler
@@ -162,6 +164,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
     lateinit var checkpointStorage: CheckpointStorage
     lateinit var smm: StateMachineManager
     lateinit var vault: VaultService
+    lateinit var vaultQuery: VaultQueryService
     lateinit var keyManagement: KeyManagementService
     var inNodeNetworkMapService: NetworkMapService? = null
     lateinit var txVerifierService: TransactionVerifierService
@@ -445,6 +448,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
         network = makeMessagingService()
         schemas = makeSchemaService()
         vault = makeVaultService(configuration.dataSourceProperties)
+        vaultQuery = makeVaultQueryService(configuration.dataSourceProperties)
         txVerifierService = makeTransactionVerifierService()
         auditService = DummyAuditService()
 
@@ -699,6 +703,8 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
 
     // TODO: sort out ordering of open & protected modifiers of functions in this class.
     protected open fun makeVaultService(dataSourceProperties: Properties): VaultService = NodeVaultService(services, dataSourceProperties)
+
+    protected open fun makeVaultQueryService(dataSourceProperties: Properties): VaultQueryService = RequeryVaultQueryServiceImpl(dataSourceProperties)
 
     protected open fun makeSchemaService(): SchemaService = NodeSchemaService()
 

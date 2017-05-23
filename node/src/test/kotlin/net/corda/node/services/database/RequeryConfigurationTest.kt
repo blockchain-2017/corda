@@ -19,8 +19,8 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.WireTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_PUBKEY_1
+import net.corda.node.services.Models
 import net.corda.node.services.persistence.DBTransactionStorage
-import net.corda.node.services.vault.schemas.Models
 import net.corda.node.services.vault.schemas.VaultCashBalancesEntity
 import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.services.vault.schemas.VaultStatesEntity

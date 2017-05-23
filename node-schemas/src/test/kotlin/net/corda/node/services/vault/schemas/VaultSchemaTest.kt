@@ -9,6 +9,7 @@ import io.requery.rx.KotlinRxEntityStore
 import io.requery.sql.*
 import io.requery.sql.platform.Generic
 import net.corda.contracts.testing.DummyDealContract
+import net.corda.contracts.testing.DummyLinearContract
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.SecureHash
@@ -35,15 +36,11 @@ import rx.Observable
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.reflect.KProperty1
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import net.corda.contracts.testing.DummyLinearContract
-import net.corda.core.utilities.*
-import kotlin.collections.ArrayList
-import kotlin.reflect.KMutableProperty1
-import kotlin.reflect.KProperty1
 
 class VaultSchemaTest {
 

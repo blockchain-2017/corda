@@ -1,9 +1,8 @@
-package net.corda.node.services.vault.schemas
+package net.corda.node.services.contract.schemas
 
 import io.requery.*
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.requery.Requery
-import net.corda.node.services.contract.schemas.CommercialPaperSchema
 import java.time.Instant
 
 /**

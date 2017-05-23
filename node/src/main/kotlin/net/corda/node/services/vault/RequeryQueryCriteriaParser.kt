@@ -18,7 +18,7 @@ import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.Logical
 import net.corda.core.schemas.StatePersistable
 import net.corda.core.utilities.loggerFor
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV2
+import net.corda.node.services.contract.schemas.CommercialPaperSchemaV3
 import net.corda.node.services.contract.schemas.CashSchemaV2
 import net.corda.node.services.contract.schemas.DummyLinearStateSchemaV2
 import net.corda.node.services.vault.schemas.VaultSchema
@@ -28,10 +28,10 @@ import java.time.Instant
 import kotlin.reflect.KProperty1
 import kotlin.reflect.jvm.javaMethod
 
-class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) : IQueryCriteriaParser {
+class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) : IQueryCriteriaParser {
 
     companion object {
-        val log = loggerFor<QueryCriteriaParser>()
+        val log = loggerFor<RequeryQueryCriteriaParser>()
 
         // Define composite primary key used in Requery Expression
         val stateRefCompositeColumn: RowExpression = RowExpression.of(listOf(VaultStatesEntity.TX_ID, VaultStatesEntity.INDEX))
@@ -264,7 +264,7 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) :
             }
 
             is QueryCriteria.VaultCustomQueryCriteria<*, *> -> {
-                entityClasses.add(CommercialPaperSchemaV2.PersistentCommercialPaperState2::class.java)
+                entityClasses.add(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
             }
 
             is QueryCriteria.AndComposition -> {
@@ -283,20 +283,6 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) :
 
         return setOf(VaultSchema.VaultStates::class.java).plus(entityClasses).toList()
     }
-}
-
-fun  <L, R> LogicalCondition<L, R>.count(): Int {
-    var size = 1
-    if (this.operator.equals(io.requery.query.Operator.AND)) {
-        if (this.leftOperand is LogicalCondition<*, *>) {
-            size += (this.leftOperand as LogicalCondition<*, *>).count()
-        }
-        if (this.rightOperand is LogicalCondition<*, *>) {
-            size += (this.rightOperand as LogicalCondition<*, *>).count()
-        }
-    }
-    else return 0
-    return size
 }
 
 class VaultQueryException(description: String) : FlowException("Vault query: $description.")

@@ -14,9 +14,9 @@ import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.TEST_TX_TIME
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV2
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV4
 import net.corda.node.services.contract.schemas.CashSchemaV2
+import net.corda.node.services.contract.schemas.CommercialPaperSchemaV3
+import net.corda.node.services.contract.schemas.CommercialPaperSchemaV4
 import net.corda.node.services.contract.schemas.DummyLinearStateSchemaV2
 import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.utilities.configureDatabase
@@ -35,7 +35,7 @@ import java.io.Closeable
 import java.time.temporal.ChronoUnit
 import java.util.*
 
-class QueryCriteriaParserTest {
+class RequeryQueryCriteriaParserTest {
 
     lateinit var services: MockServices
     lateinit var dataSource: Closeable
@@ -55,7 +55,7 @@ class QueryCriteriaParserTest {
     private val DEAL_REF2 = "456"
     private val DEAL_REF3 = "789"
 
-    lateinit var criteriaParse: QueryCriteriaParser
+    lateinit var criteriaParse: RequeryQueryCriteriaParser
 
     @Before
     fun setUp() {
@@ -88,7 +88,7 @@ class QueryCriteriaParserTest {
 
         }
 
-        criteriaParse = QueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)))
+        criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)))
     }
 
     @After
@@ -125,13 +125,13 @@ class QueryCriteriaParserTest {
         assertThat(contractStateEntities[1]).isEqualTo(DummyLinearStateSchemaV2.PersistentDummyLinearState2::class.java)
 
         // Commercial Paper
-        val expressionCustom = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::currency, Operator.EQUAL, USD.currencyCode)
+        val expressionCustom = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
 
         val criteriaCustom = QueryCriteria.VaultCustomQueryCriteria(expressionCustom)
         val contractStateEntitiesCustom = criteriaParse.deriveEntities(criteriaCustom)
         assertThat(contractStateEntitiesCustom).hasSize(2)
         assertThat(contractStateEntitiesCustom[0]).isEqualTo(VaultSchema.VaultStates::class.java)
-        assertThat(contractStateEntitiesCustom[1]).isEqualTo(CommercialPaperSchemaV2.PersistentCommercialPaperState2::class.java)
+        assertThat(contractStateEntitiesCustom[1]).isEqualTo(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
 
 
     }
@@ -182,11 +182,7 @@ class QueryCriteriaParserTest {
 
         val linearIds = linearStates.map { it.state.data.linearId }
         val criteria1 = QueryCriteria.LinearStateQueryCriteria(linearId = linearIds)
-        val logicalCondition = criteriaParse.parse(criteria1)
-        assertThat(logicalCondition.count()).isEqualTo(2)
-//        assertThat(logicalCondition.leftOperand).isEqualTo()
-//        assertThat(logicalCondition.operator).isEqualTo(Operator.)
-//        assertThat(logicalCondition.leftOperand).isEqualTo()
+        criteriaParse.parse(criteria1)
 
         val dealRefs = listOf(DEAL_REF1, DEAL_REF2)
         val criteria2 = QueryCriteria.LinearStateQueryCriteria(dealRef = dealRefs)
@@ -274,7 +270,7 @@ class QueryCriteriaParserTest {
     fun VaultCustomQueryCriteriaSingleExpressionInterface() {
 
         // Commercial Paper
-        val expression = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::currency, Operator.EQUAL, USD.currencyCode)
+        val expression = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
         val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
 
         val requeryExpr = criteriaParse.parseCriteria(criteria1)
@@ -298,9 +294,9 @@ class QueryCriteriaParserTest {
     fun VaultCustomQueryCriteriaCombinedExpressions() {
 
         // Commercial Paper
-        val ccyExpr = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::currency, Operator.EQUAL, USD.currencyCode)
-        val maturityExpr = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
-        val faceValueExpr = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
+        val ccyExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
+        val maturityExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
+        val faceValueExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
 
         val criteria1 = QueryCriteria.VaultCustomQueryCriteria(ccyExpr)
         val criteria2 = QueryCriteria.VaultCustomQueryCriteria(maturityExpr)

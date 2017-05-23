@@ -175,50 +175,6 @@ interface VaultService {
     // @Deprecated("This function will be removed in a future milestone", ReplaceWith("trackBy(QueryCriteria())"))
     fun track(): Pair<Vault<ContractState>, Observable<Vault.Update>>
 
-    // DOCSTART VaultQueryAPI
-    /**
-     * Generic vault query function which takes a [QueryCriteria] object to define filters,
-     * optional [PageSpecification] and optional [Sort] modification criteria (default unsorted),
-     * and returns a [Vault.Page] object containing the following:
-     *  1. states as a List of <StateAndRef> (page number and size defined by [PageSpecification])
-     *  2. states metadata as a List of [Vault.StateMetadata] held in the Vault States table.
-     *  3. the [PageSpecification] used in the query
-     *  4. a total number of results available (for subsequent paging if necessary)
-     *
-     * Note: a default [PageSpecification] is applied to the query returning the 1st page (indexed from 0) with up to 200 entries.
-     *       It is the responsibility of the Client to request further pages and/or specify a more suitable [PageSpecification].
-     * Note2: you can also annotate entity fields with JPA OrderBy annotation to achieve the same effect as explicit sorting
-     */
-    fun <T : ContractState> _queryBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
-                                    paging: PageSpecification = PageSpecification(),
-                                    sorting: Sort = Sort(emptySet()),
-                                    contractType: Class<out ContractState>): Vault.Page<T>
-    /**
-     * Generic vault query function which takes a [QueryCriteria] object to define filters,
-     * optional [PageSpecification] and optional [Sort] modification criteria (default unsorted),
-     * and returns a [Vault.PageAndUpdates] object containing
-     * 1) a snapshot as a [Vault.Page] (described previously in [queryBy])
-     * 2) an [Observable] of [Vault.Update]
-     *
-     * Notes: the snapshot part of the query adheres to the same behaviour as the [queryBy] function.
-     *        the [QueryCriteria] applies to both snapshot and deltas (streaming updates).
-     */
-    fun <T : ContractState> trackBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
-                                    paging: PageSpecification = PageSpecification(),
-                                    sorting: Sort = Sort(emptySet())): Vault.PageAndUpdates<T>
-    // DOCEND VaultQueryAPI
-
-    // Note: cannot apply @JvmOverloads to interfaces nor interface implementations
-    // Java Helpers
-    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria): Vault.Page<T> = _queryBy(criteria, PageSpecification(), Sort(emptySet()), contractType)
-    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> = _queryBy(criteria, paging, Sort(emptySet()), contractType)
-    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, sorting: Sort): Vault.Page<T> = _queryBy(criteria, PageSpecification(), sorting, contractType)
-    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> = _queryBy(criteria, paging, sorting, contractType)
-
-    fun <T : ContractState> trackBy(criteria: QueryCriteria): Vault.PageAndUpdates<T> = trackBy(criteria, PageSpecification(), Sort(emptySet()))
-    fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification): Vault.PageAndUpdates<T> = trackBy(criteria, paging, Sort(emptySet()))
-    fun <T : ContractState> trackBy(criteria: QueryCriteria, sorting: Sort): Vault.PageAndUpdates<T> = trackBy(criteria, sorting = Sort(emptySet()))
-
     /**
      * Return unconsumed [ContractState]s for a given set of [StateRef]s
      */
@@ -371,28 +327,75 @@ inline fun <reified T : DealState> VaultService.dealsWith(party: AbstractParty) 
     it.state.data.participants.any { it == party }
 }
 
-inline fun <reified T : ContractState> VaultService.queryBy(): Vault.Page<T> {
+class StatesNotAvailableException(override val message: String?, override val cause: Throwable? = null) : FlowException(message, cause) {
+    override fun toString() = "Soft locking error: $message"
+}
+
+interface VaultQueryService {
+
+    // DOCSTART VaultQueryAPI
+    /**
+     * Generic vault query function which takes a [QueryCriteria] object to define filters,
+     * optional [PageSpecification] and optional [Sort] modification criteria (default unsorted),
+     * and returns a [Vault.Page] object containing the following:
+     *  1. states as a List of <StateAndRef> (page number and size defined by [PageSpecification])
+     *  2. states metadata as a List of [Vault.StateMetadata] held in the Vault States table.
+     *  3. the [PageSpecification] used in the query
+     *  4. a total number of results available (for subsequent paging if necessary)
+     *
+     * Note: a default [PageSpecification] is applied to the query returning the 1st page (indexed from 0) with up to 200 entries.
+     *       It is the responsibility of the Client to request further pages and/or specify a more suitable [PageSpecification].
+     * Note2: you can also annotate entity fields with JPA OrderBy annotation to achieve the same effect as explicit sorting
+     */
+    fun <T : ContractState> _queryBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
+                                     paging: PageSpecification = PageSpecification(),
+                                     sorting: Sort = Sort(emptySet()),
+                                     contractType: Class<out ContractState>): Vault.Page<T>
+    /**
+     * Generic vault query function which takes a [QueryCriteria] object to define filters,
+     * optional [PageSpecification] and optional [Sort] modification criteria (default unsorted),
+     * and returns a [Vault.PageAndUpdates] object containing
+     * 1) a snapshot as a [Vault.Page] (described previously in [queryBy])
+     * 2) an [Observable] of [Vault.Update]
+     *
+     * Notes: the snapshot part of the query adheres to the same behaviour as the [queryBy] function.
+     *        the [QueryCriteria] applies to both snapshot and deltas (streaming updates).
+     */
+    fun <T : ContractState> trackBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
+                                    paging: PageSpecification = PageSpecification(),
+                                    sorting: Sort = Sort(emptySet())): Vault.PageAndUpdates<T>
+    // DOCEND VaultQueryAPI
+
+    // Note: cannot apply @JvmOverloads to interfaces nor interface implementations
+    // Java Helpers
+    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria): Vault.Page<T> = _queryBy(criteria, PageSpecification(), Sort(emptySet()), contractType)
+    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> = _queryBy(criteria, paging, Sort(emptySet()), contractType)
+    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, sorting: Sort): Vault.Page<T> = _queryBy(criteria, PageSpecification(), sorting, contractType)
+    fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> = _queryBy(criteria, paging, sorting, contractType)
+
+    fun <T : ContractState> trackBy(criteria: QueryCriteria): Vault.PageAndUpdates<T> = trackBy(criteria, PageSpecification(), Sort(emptySet()))
+    fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification): Vault.PageAndUpdates<T> = trackBy(criteria, paging, Sort(emptySet()))
+    fun <T : ContractState> trackBy(criteria: QueryCriteria, sorting: Sort): Vault.PageAndUpdates<T> = trackBy(criteria, sorting = Sort(emptySet()))
+}
+
+inline fun <reified T : ContractState> VaultQueryService.queryBy(): Vault.Page<T> {
     return _queryBy(QueryCriteria.VaultQueryCriteria(), PageSpecification(), Sort(emptySet()), T::class.java)
 }
 
-inline fun <reified T : ContractState> VaultService.queryBy(criteria: QueryCriteria): Vault.Page<T> {
+inline fun <reified T : ContractState> VaultQueryService.queryBy(criteria: QueryCriteria): Vault.Page<T> {
     return _queryBy(criteria, PageSpecification(), Sort(emptySet()), T::class.java)
 }
 
-inline fun <reified T : ContractState> VaultService.queryBy(criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> {
+inline fun <reified T : ContractState> VaultQueryService.queryBy(criteria: QueryCriteria, paging: PageSpecification): Vault.Page<T> {
     return _queryBy(criteria, paging, Sort(emptySet()), T::class.java)
 }
 
-inline fun <reified T : ContractState> VaultService.queryBy(criteria: QueryCriteria, sorting: Sort): Vault.Page<T> {
+inline fun <reified T : ContractState> VaultQueryService.queryBy(criteria: QueryCriteria, sorting: Sort): Vault.Page<T> {
     return _queryBy(criteria, PageSpecification(), sorting, T::class.java)
 }
 
-inline fun <reified T : ContractState> VaultService.queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> {
+inline fun <reified T : ContractState> VaultQueryService.queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> {
     return _queryBy(criteria, paging, sorting, T::class.java)
-}
-
-class StatesNotAvailableException(override val message: String?, override val cause: Throwable? = null) : FlowException(message, cause) {
-    override fun toString() = "Soft locking error: $message"
 }
 
 /**
