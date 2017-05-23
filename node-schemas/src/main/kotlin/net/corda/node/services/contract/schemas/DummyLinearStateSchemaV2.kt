@@ -1,4 +1,4 @@
-package net.corda.node.services.vault.schemas
+package net.corda.node.services.contract.schemas
 
 import io.requery.Column
 import io.requery.Entity

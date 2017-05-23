@@ -1,7 +1,10 @@
 package net.corda.node.services.vault
 
 import io.requery.kotlin.*
+import io.requery.meta.Attribute
 import io.requery.meta.AttributeBuilder
+import io.requery.meta.AttributeDelegate
+import io.requery.meta.Type
 import io.requery.query.Expression
 import io.requery.query.LogicalCondition
 import io.requery.query.OrderingExpression
@@ -15,60 +18,51 @@ import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.Logical
 import net.corda.core.schemas.StatePersistable
 import net.corda.core.utilities.loggerFor
-import net.corda.node.services.vault.schemas.*
+import net.corda.node.services.contract.schemas.CommercialPaperSchemaV2
+import net.corda.node.services.contract.schemas.CashSchemaV2
+import net.corda.node.services.contract.schemas.DummyLinearStateSchemaV2
+import net.corda.node.services.vault.schemas.VaultSchema
+import net.corda.node.services.vault.schemas.VaultStatesEntity
 import org.bouncycastle.asn1.x500.X500Name
 import java.time.Instant
-import java.util.*
-import kotlin.reflect.KMutableProperty1
 import kotlin.reflect.KProperty1
+import kotlin.reflect.jvm.javaMethod
 
-class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
+class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) : IQueryCriteriaParser {
 
-    private companion object {
+    companion object {
         val log = loggerFor<QueryCriteriaParser>()
 
         // Define composite primary key used in Requery Expression
         val stateRefCompositeColumn: RowExpression = RowExpression.of(listOf(VaultStatesEntity.TX_ID, VaultStatesEntity.INDEX))
-    }
 
-    fun parse(criteria: QueryCriteria) : LogicalCondition<*, *> {
+        /**
+         * Duplicate code: non-reified implementation of Requery findAttribute
+         */
+        fun <T : Any, R> findAttribute(clazz: Class<out T>, property: KProperty1<T, R>):
+                AttributeDelegate<T, R> {
+            val type: Type<*>? = AttributeDelegate.types
+                    .filter { type -> (type.classType == clazz || type.baseType == clazz)}
+                    .firstOrNull()
 
-        val conditions : LogicalCondition<*, *> =
-
-            when (criteria) {
-                is QueryCriteria.VaultQueryCriteria -> {
-                    println(criteria.javaClass.name)
-                    parseCriteria(criteria)
-                }
-                is QueryCriteria.FungibleAssetQueryCriteria -> {
-                    println(criteria.javaClass.name)
-                    parseCriteria(criteria)
-                }
-                is QueryCriteria.LinearStateQueryCriteria -> {
-                    println(criteria.javaClass.name)
-                    parseCriteria(criteria)
-                }
-//                is QueryCriteria.VaultCustomQueryCriteria<*,*> -> {
-//                    println(criteria.javaClass.name)
-//                    parseCriteria(criteria)
-//                }
-                is QueryCriteria.AndComposition -> {
-                    println("AND")
-                    val left: LogicalCondition<*,*> = parse(criteria.a)
-                    val right: LogicalCondition<*,*> = parse(criteria.b)
-                    return left.and(right)
-                }
-                is QueryCriteria.OrComposition -> {
-                    println("OR")
-                    val left: LogicalCondition<*,*> = parse(criteria.a)
-                    val right: LogicalCondition<*,*> = parse(criteria.b)
-                    return left.or(right)
-                }
-                else ->
-                    throw InvalidQueryCriteriaException(criteria::class.java)
+            if (type == null) {
+                throw UnsupportedOperationException(clazz.simpleName + "." + property.name + " cannot be used in query")
             }
 
-        return conditions
+            val attribute: Attribute<*, *>? = type.attributes
+                    .filter { attribute -> attribute.propertyName.replaceFirst("get", "")
+                            .equals(property.name, ignoreCase = true) }.firstOrNull()
+
+            if (attribute !is AttributeDelegate) {
+                throw UnsupportedOperationException(clazz.simpleName + "." + property.name + " cannot be used in query")
+            }
+            @Suppress("UNCHECKED_CAST")
+            return attribute as AttributeDelegate<T, R>
+        }
+    }
+
+    override fun parse(criteria: QueryCriteria) : LogicalCondition<*,*> {
+        return criteria.visit(this)
     }
 
     inline fun <reified T: ContractState> deriveContractTypes(): Set<Class<out ContractState>> = deriveContractTypes(T::class.java)
@@ -80,18 +74,15 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
             return setOf(contractType)
     }
 
-    fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): LogicalCondition<*, *> {
+    override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): LogicalCondition<*, *> {
 
         // state status
-        val attribute = findAttribute(VaultSchema.VaultStates::stateStatus)
-        val attributeBuilder = AttributeBuilder<VaultSchema.VaultStates, Vault.StateStatus>(attribute.name, attribute.classType)
-        println(attribute.declaringType.baseType)
-        val queryAttribute = attributeBuilder.build()
+        val attribute = findAttribute(VaultSchema.VaultStates::stateStatus).get()
         var chainedConditions : LogicalCondition<*, *> =
                 if (criteria.status == Vault.StateStatus.ALL)
-                    queryAttribute.`in`(setOf(Vault.StateStatus.UNCONSUMED, Vault.StateStatus.CONSUMED))
+                    attribute.`in`(setOf(Vault.StateStatus.UNCONSUMED, Vault.StateStatus.CONSUMED))
                 else
-                    queryAttribute.equal(criteria.status)
+                    attribute.equal(criteria.status)
 
         // contract State Types
         criteria.contractStateTypes?.filter { it.name != ContractState::class.java.name }?.let {
@@ -108,10 +99,9 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
 
         // notary names
         criteria.notaryName?.let {
-            val attributeNotary = findAttribute(VaultSchema.VaultStates::notaryName)
-            val queryAttributeNotary = AttributeBuilder<VaultSchema.VaultStates, String>(attributeNotary.name, attributeNotary.classType).build()
+            val attributeNotary = findAttribute(VaultSchema.VaultStates::notaryName).get()
             val notaryNames = (criteria.notaryName as List<X500Name>).map { it.toString() }  // why does this need a cast?
-            chainedConditions = chainedConditions.and(queryAttributeNotary.`in`(notaryNames))
+            chainedConditions = chainedConditions.and(attributeNotary.`in`(notaryNames))
         }
 
         // state references
@@ -157,67 +147,44 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
         return condition
     }
 
-    fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): LogicalCondition<*, *> {
+    override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): LogicalCondition<*, *> {
 
         // UNCONSUMED by default
-        val attribute = findAttribute(VaultSchema.VaultStates::stateStatus)
-        val attributeBuilder = AttributeBuilder<VaultSchema.VaultStates, Vault.StateStatus>(attribute.name, attribute.classType)
-        val queryAttribute = attributeBuilder.build()
-        val entityClass = queryAttribute.elementClass
-
-        var logicalCondition: LogicalCondition<*, *> = queryAttribute.equal(Vault.StateStatus.UNCONSUMED)
+        val attribute = findAttribute(VaultSchema.VaultStates::stateStatus).get()
+        var logicalCondition: LogicalCondition<*, *> = attribute.equal(Vault.StateStatus.UNCONSUMED)
 
         // parse linearId
         logicalCondition = logicalCondition.and(
                 criteria.linearId?.let {
-                    val attribute1 = findAttribute(VaultSchema.VaultLinearState::externalId)
-                    val attribute2 = findAttribute(VaultSchema.VaultLinearState::uuid)
-
-                    val attributeBuilder1 = AttributeBuilder<VaultSchema.VaultLinearState, String>(attribute1.name, attribute1.classType)
-                    val attributeBuilder2 = AttributeBuilder<VaultSchema.VaultLinearState, UUID>(attribute2.name, attribute2.classType)
-
-                    val queryAttribute1 = attributeBuilder1.build()
-                    val queryAttribute2 = attributeBuilder2.build()
-
-                    val logicalCondition1 = queryAttribute1.`in`(criteria.linearId?.map { it.externalId })
-                    val logicalCondition2 = queryAttribute2.`in`(criteria.linearId?.map { it.id })
+                    val attribute1 = findAttribute(VaultSchema.VaultLinearState::externalId).get()
+                    val attribute2 = findAttribute(VaultSchema.VaultLinearState::uuid).get()
+                    val logicalCondition1 = attribute1.`in`(criteria.linearId?.map { it.externalId })
+                    val logicalCondition2 = attribute2.`in`(criteria.linearId?.map { it.id })
                     logicalCondition1.and(logicalCondition2)
                 })
 
         // deal ref
         logicalCondition?.and(
             criteria.dealRef?.let {
-                val attribute = findAttribute(VaultSchema.VaultDealState::ref)
-                val attributeBuilder = AttributeBuilder<VaultSchema.VaultDealState, String>(attribute.name, attribute.classType)
-                val queryAttribute = attributeBuilder.build()
-                queryAttribute.`in`(criteria.dealRef)
+                val attribute = findAttribute(VaultSchema.VaultDealState::ref).get()
+                attribute.`in`(criteria.dealRef)
             })
 
         // deal parties
         logicalCondition?.and(
                 criteria.dealPartyName?.let {
-                    val attribute = findAttribute(VaultSchema.VaultDealState::partyNames)
-                    val attributeBuilder = AttributeBuilder<VaultSchema.VaultDealState, Set<String>>(attribute.name, attribute.classType)
-//                    val attributeBuilder = AttributeBuilder<VaultSchema.VaultDealState, Set<VaultSchema.VaultParty>>(attribute.name, attribute.classType)
-                    val queryAttribute = attributeBuilder.build()
+                    val attribute = findAttribute(VaultSchema.VaultDealState::partyNames).get()
                     val parties = it.map { it.commonName }.toSet()
-//                    val parties = it.map {
-//                                val party = VaultPartyEntity()
-//                                party.name = it.nameOrNull()?.commonName
-//                                party.key = it.owningKey.toBase58String()
-//                                party
-//                            }.toSet()
-                    queryAttribute.eq(parties)
+                    attribute.eq(parties)
                 })
 
-//        if (logicalCondition.count() <= 1)
         if (logicalCondition == null)
             throw InvalidQueryCriteriaException(QueryCriteria.LinearStateQueryCriteria::class.java)
 
         return logicalCondition
     }
 
-    fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): LogicalCondition<*, *> {
+    override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): LogicalCondition<*, *> {
         criteria.tokenType
         criteria.tokenValue
         criteria.quantity
@@ -227,18 +194,11 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
         criteria.exitKeyIdentity
 
         // parse quantity
-        val attribute = findAttribute(VaultSchema.VaultFungibleState::quantity)
-        val attributeBuilder = AttributeBuilder<VaultSchema.VaultFungibleState, Long>(attribute.name, attribute.classType)
-        val queryAttribute = attributeBuilder.build()
-        val entityClass = attribute.elementClass
+        val attribute = findAttribute(VaultSchema.VaultFungibleState::quantity).get()
 
         val quantityExpr: Logical<*, Long>? = criteria.quantity
         quantityExpr?.let {
-            it.leftOperand
-            it.operator
-            it.rightOperand
-
-            val logicalCondition = queryAttribute.greaterThan(it.rightOperand)
+            val logicalCondition = attribute.greaterThan(it.rightOperand)
             return logicalCondition
         }
 
@@ -246,18 +206,18 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
 
     }
 
-    inline fun <reified L : Any, R>  parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>, R>): LogicalCondition<*, *> {
+    override fun <L: Any, R> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): LogicalCondition<*, *> {
 
         val logicalExpr = criteria.indexExpression
         val property = logicalExpr?.leftOperand!!
 
-        val attribute = findAttribute(property)
-        val attributeBuilder = AttributeBuilder<Any, R>(attribute.name, attribute.classType)
-        val queryAttribute = attributeBuilder.build()
+        val attribute = findAttribute(property.getter.javaMethod!!.declaringClass as Class<L>, property)
+        val queryAttribute = attribute.get()
 
         val logicalCondition =
                 when (logicalExpr?.operator) {
                     Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand)
+                    Operator.GREATER_THAN_OR_EQUAL -> queryAttribute.gte(logicalExpr.rightOperand)
                     else -> {
                         throw InvalidQueryOperatorException(logicalExpr!!.operator)
                     }
@@ -266,27 +226,9 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
         return logicalCondition
     }
 
-    inline fun <reified L : Any, R> parseMe(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>,*>) {
-
-        val logicalExpr = criteria.indexExpression
-        val property = logicalExpr?.leftOperand!!
-        val attribute = findAttribute(property)
-        println(attribute)
-    }
-
-    inline fun <reified L : Any, R> parseMe2(expression: LogicalExpression<KMutableProperty1<L, R>,*>) {
-        val property = expression?.leftOperand!!
-        val attribute = findAttribute(property)
-        println(attribute)
-    }
-
     fun parseSorting(sortColumn: Sort.SortColumn): OrderingExpression<*> {
 
         val attribute = AttributeBuilder<VaultSchema.VaultStates, String>(sortColumn.columnName, sortColumn.columnName.javaClass)
-
-//        val attribute = findAttribute(sortColumn.columnName)
-//        val attributeBuilder = AttributeBuilder<Any, R>(attribute.name, attribute.classType)
-//        val queryAttribute = attributeBuilder.build()
 
         val orderingExpression =
                 when (sortColumn.direction) {
@@ -322,7 +264,7 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
             }
 
             is QueryCriteria.VaultCustomQueryCriteria<*, *> -> {
-                entityClasses.add(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
+                entityClasses.add(CommercialPaperSchemaV2.PersistentCommercialPaperState2::class.java)
             }
 
             is QueryCriteria.AndComposition -> {
@@ -339,38 +281,9 @@ class QueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) {
                 throw InvalidQueryCriteriaException(criteria::class.java)
         }
 
-        return listOf(VaultSchema.VaultStates::class.java).plus(entityClasses.toList())
+        return setOf(VaultSchema.VaultStates::class.java).plus(entityClasses).toList()
     }
 }
-
-inline fun <reified L : Any, R> resolveEntityType(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>,*>): Class<L> {
-
-    val logicalExpr = criteria.indexExpression
-    val property = logicalExpr?.leftOperand!!
-    val attribute = findAttribute(property)
-    println(attribute)
-
-    return L::class.java
-}
-//inline fun <reified L : Any, R>  resolveEntityType(criteria: QueryCriteria.VaultCustomQueryCriteria<KMutableProperty1<L, R>, R>): Class<Persistable> {
-//
-//    val logicalExpr = criteria.indexExpression
-//    val property = logicalExpr?.leftOperand!!
-//
-//    val attribute = findAttribute(property)
-//    val attributeBuilder = AttributeBuilder<Any, R>(attribute.name, attribute.classType)
-//    val queryAttribute = attributeBuilder.build()
-//
-//    val logicalCondition =
-//            when (logicalExpr?.operator) {
-//                Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand)
-//                else -> {
-//                    throw InvalidQueryOperatorException(logicalExpr!!.operator)
-//                }
-//            }
-//
-//    return logicalCondition
-//}
 
 fun  <L, R> LogicalCondition<L, R>.count(): Int {
     var size = 1

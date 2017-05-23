@@ -34,7 +34,7 @@ interface AndOr<out Q> {
 }
 
 @CordaSerializable
-sealed class Logical<L, R> : Condition<L, R>, AndOr<Logical<*, *>>
+sealed class Logical<L, R> : Condition<L, R>
 
 class LogicalExpression<L, R>(leftOperand: L,
                               operator: Operator,
@@ -49,8 +49,6 @@ class LogicalExpression<L, R>(leftOperand: L,
                     { "Cannot use a unary operator (${Operator.IS_NULL}, ${Operator.NOT_NULL}) if right operand is not null"} )
         }
     }
-    override fun <V> and(condition: Condition<V, *>): Logical<*, *> = LogicalExpression(this, Operator.AND, condition)
-    override fun <V> or(condition: Condition<V, *>): Logical<*, *> = LogicalExpression(this, Operator.OR, condition)
 
     override val operator: Operator = operator
     override val rightOperand: R = rightOperand as R

@@ -377,12 +377,12 @@ class VaultSchemaTest {
         Assert.assertSame(stateEntity, results)
     }
 
-    private inline fun <reified F : Persistable, reified S : Persistable> queryWithJoin(//table1: Class<F>,
+    private inline fun <reified F : Persistable, reified S : Persistable, R1, R2> queryWithJoin(//table1: Class<F>,
                                                                                         //table2: Class<S>,
-                                                                                        table1txId: KProperty1<F, *>,
-                                                                                        table2txId: KProperty1<S, *>,
-                                                                                        table1index: KProperty1<F, *>,
-                                                                                        table2index: KProperty1<S, *>) : F {
+                                                                                        table1txId: KProperty1<F, R1>,
+                                                                                        table2txId: KProperty1<S, R1>,
+                                                                                        table1index: KProperty1<F, R2>,
+                                                                                        table2index: KProperty1<S, R2>) : F {
         println("${F::class} has members ${F::class.members.map { it.name }}")
         val table1 = F::class
         val table2 = S::class
@@ -397,18 +397,18 @@ class VaultSchemaTest {
         println(idx1)
         println(idx2)
 
-        val txIdVSAttribute = VaultSchema.VaultStates::txId
-        val txIdVLSAttribute = VaultSchema.VaultLinearState::txId
+//        val txIdVSAttribute = VaultSchema.VaultStates::txId
+//        val txIdVLSAttribute = VaultSchema.VaultLinearState::txId
+//
+//        val indexVSAttribute = VaultSchema.VaultStates::index
+//        val indexVLSAttribute = VaultSchema.VaultLinearState::index
 
-        val indexVSAttribute = VaultSchema.VaultStates::index
-        val indexVLSAttribute = VaultSchema.VaultLinearState::index
-
-        val attribute1 = findAttribute(txIdVSAttribute)
-        val attributeBuilder1 = AttributeBuilder<F, String>(attribute1.name, attribute1.classType)
+        val attribute1 = findAttribute(table1txId)
+        val attributeBuilder1 = AttributeBuilder<F, R1>(attribute1.name, attribute1.classType)
         val queryAttribute1 = attributeBuilder1.build()
 
-        val attribute2 = findAttribute(txIdVLSAttribute)
-        val attributeBuilder2 = AttributeBuilder<S, String>(attribute2.name, attribute2.classType)
+        val attribute2 = findAttribute(table1index)
+        val attributeBuilder2 = AttributeBuilder<S, R2>(attribute2.name, attribute2.classType)
         val queryAttribute2 = attributeBuilder2.build()
 
         val condition1 = table1txId.eq(table2txId)

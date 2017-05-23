@@ -1,5 +1,7 @@
 package net.corda.core.node.services.vault
 
+import io.requery.query.LogicalCondition
+import net.corda.core.contracts.Commodity
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.UniqueIdentifier
@@ -11,6 +13,7 @@ import net.corda.core.serialization.OpaqueBytes
 import org.bouncycastle.asn1.x500.X500Name
 import java.time.Instant
 import java.util.*
+import kotlin.reflect.KMutableProperty1
 
 /**
  * Indexing assumptions:
@@ -18,6 +21,8 @@ import java.util.*
  */
 @CordaSerializable
 sealed class QueryCriteria {
+
+    abstract fun visit(parser: IQueryCriteriaParser) : LogicalCondition<*,*>
 
     /**
      * VaultQueryCriteria: provides query by attributes defined in [VaultSchema.VaultStates]
@@ -29,7 +34,12 @@ sealed class QueryCriteria {
             val notaryName: List<X500Name>? = null,
             val includeSoftlockedStates: Boolean = true,
             val timeCondition: Logical<TimeInstantType, Array<Instant>>? = null,
-            val participantIdentities: List<X500Name>? = null) : QueryCriteria()
+            val participantIdentities: List<X500Name>? = null) : QueryCriteria() {
+
+        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
+            return parser.parseCriteria(this)
+        }
+    }
 
     /**
      * LinearStateQueryCriteria: provides query by attributes defined in [VaultSchema.VaultLinearState]
@@ -37,7 +47,12 @@ sealed class QueryCriteria {
     data class LinearStateQueryCriteria @JvmOverloads constructor(
             val linearId: List<UniqueIdentifier>? = null,
             val dealRef: List<String>? = null,
-            val dealPartyName: List<X500Name>? = null) : QueryCriteria()
+            val dealPartyName: List<X500Name>? = null) : QueryCriteria() {
+
+        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
+            return parser.parseCriteria(this)
+        }
+    }
 
    /**
     * FungibleStateQueryCriteria: provides query by attributes defined in [VaultSchema.VaultFungibleState]
@@ -53,7 +68,12 @@ sealed class QueryCriteria {
             val tokenValue: List<String>? = null,
             val issuerPartyName: List<X500Name>? = null,
             val issuerRef: List<OpaqueBytes>? = null,
-            val exitKeyIdentity: List<X500Name>? = null) : QueryCriteria()
+            val exitKeyIdentity: List<X500Name>? = null) : QueryCriteria() {
+
+       override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
+           return parser.parseCriteria(this)
+       }
+   }
 
     /**
      * VaultCustomQueryCriteria: provides query by custom attributes defined in a contracts
@@ -66,11 +86,29 @@ sealed class QueryCriteria {
      *
      * Refer to [CommercialPaper.State] for a concrete example.
      */
-    data class VaultCustomQueryCriteria<L,R>(val indexExpression: Logical<L,R>) : QueryCriteria()
+    data class VaultCustomQueryCriteria<L: Any, R>(val indexExpression: Logical<KMutableProperty1<L,R>, out R>) : QueryCriteria() {
 
+        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
+            return parser.parseCriteria(this)
+        }
+    }
     // enable composition of [QueryCriteria]
-    data class AndComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria()
-    data class OrComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria()
+    data class AndComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
+
+        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
+            val left: LogicalCondition<*,*> = parser.parse(this.a)
+            val right: LogicalCondition<*,*> = parser.parse(this.b)
+            return left.and(right)
+        }
+    }
+
+    data class OrComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
+        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
+            val left: LogicalCondition<*,*> = parser.parse(this.a)
+            val right: LogicalCondition<*,*> = parser.parse(this.b)
+            return left.or(right)
+        }
+    }
 
     // timestamps stored in the vault states table [VaultSchema.VaultStates]
     @CordaSerializable
@@ -78,17 +116,15 @@ sealed class QueryCriteria {
         RECORDED,
         CONSUMED
     }
+}
 
-   fun  <T: ContractState> withType(contractType: Class<T>) {
-       println("My type is: $contractType")
-    }
+interface IQueryCriteriaParser {
+    fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): LogicalCondition<*, *>
+    fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): LogicalCondition<*, *>
+    fun <L: Any,R> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): LogicalCondition<*, *>
+    fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): LogicalCondition<*, *>
 
-//    fun  <T: ContractState> withType(contractType: Class<T>): QueryCriteria {
-//        if (this is VaultQueryCriteria)
-//            return VaultQueryCriteria().copy(contractStateTypes = this.contractStateTypes?.plus(contractType) ?: setOf(contractType))
-//        else
-//            return VaultQueryCriteria(contractStateTypes = setOf(contractType), status = Vault.StateStatus.UNCONSUMED)
-//    }
+    fun parse(criteria: QueryCriteria) : LogicalCondition<*,*>
 }
 
 infix fun QueryCriteria.and(criteria: QueryCriteria): QueryCriteria = AndComposition(this, criteria)

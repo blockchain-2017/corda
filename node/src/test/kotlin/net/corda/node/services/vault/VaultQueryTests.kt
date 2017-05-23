@@ -20,12 +20,12 @@ import net.corda.core.seconds
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.*
+import net.corda.node.services.contract.schemas.CommercialPaperSchemaV2
 import net.corda.node.services.vault.schemas.VaultLinearStateEntity
 import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.CashSchemaV1.PersistentCashState
-import net.corda.schemas.CommercialPaperSchemaV1.PersistentCommercialPaperState
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
@@ -59,7 +59,7 @@ class VaultQueryTests {
         dataSource = dataSourceAndDatabase.first
         database = dataSourceAndDatabase.second
         database.transaction {
-            services = object : MockServices() {
+            services = object : MockServices(MEGA_CORP_KEY) {
                 override val vaultService: VaultService = makeVaultService(dataSourceProps)
 
                 override fun recordTransactions(txs: Iterable<SignedTransaction>) {
@@ -884,12 +884,15 @@ class VaultQueryTests {
                     }.toSignedTransaction()
             services.recordTransactions(commercialPaper)
 
-            val ccyIndex = LogicalExpression(PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
-            val maturityIndex = LogicalExpression(PersistentCommercialPaperState::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
-            val faceValueIndex = LogicalExpression(PersistentCommercialPaperState::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000)
+            val ccyIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::currency, Operator.EQUAL, USD.currencyCode)
+            val maturityIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
+            val faceValueIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState2::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
 
-            val criteria = VaultCustomQueryCriteria(maturityIndex.and(faceValueIndex).or(ccyIndex))
-            val result = vaultSvc.queryBy<CommercialPaper.State>(criteria)
+            val criteria1 = VaultCustomQueryCriteria(ccyIndex)
+            val criteria2 = VaultCustomQueryCriteria(maturityIndex)
+            val criteria3 = VaultCustomQueryCriteria(faceValueIndex)
+
+            val result = vaultSvc.queryBy<CommercialPaper.State>(criteria1.and(criteria3).or(criteria2))
 
             assertThat(result.states).hasSize(1)
             assertThat(result.statesMetadata).hasSize(1)
@@ -913,10 +916,12 @@ class VaultQueryTests {
             val generalCriteria = VaultQueryCriteria(Vault.StateStatus.ALL)
 
             val currencyIndex = LogicalExpression(PersistentCashState::currency, Operator.EQUAL, USD.currencyCode)
-            val quantityIndex = LogicalExpression(PersistentCashState::pennies, Operator.GREATER_THAN_OR_EQUAL, 10)
-            val customCriteria = VaultCustomQueryCriteria(currencyIndex.and(quantityIndex))
+            val quantityIndex = LogicalExpression(PersistentCashState::pennies, Operator.GREATER_THAN_OR_EQUAL, 10L)
 
-            val criteria = generalCriteria.and(customCriteria)
+            val customCriteria1 = VaultCustomQueryCriteria(currencyIndex)
+            val customCriteria2 = VaultCustomQueryCriteria(quantityIndex)
+
+            val criteria = generalCriteria.and(customCriteria1.and(customCriteria2))
             val results = vaultSvc.queryBy<Cash.State>(criteria)
             // DOCEND VaultQueryExample16
 
@@ -943,9 +948,11 @@ class VaultQueryTests {
                     else
                         LogicalExpression(VaultLinearStateEntity::externalId, Operator.IN, externalIds)
             val linearIdCondition = LogicalExpression(VaultLinearStateEntity::uuid, Operator.EQUAL, uuids)
-            val customIndexCriteria = VaultCustomQueryCriteria(linearIdsExpression.or(linearIdCondition))
 
-            val criteria = basicCriteria.and(customIndexCriteria)
+            val customIndexCriteria1 = VaultCustomQueryCriteria(linearIdsExpression)
+            val customIndexCriteria2 = VaultCustomQueryCriteria(linearIdCondition)
+
+            val criteria = basicCriteria.and(customIndexCriteria1.or(customIndexCriteria2))
             val results = vaultSvc.queryBy<LinearState>(criteria)
 
             assertThat(results.states).hasSize(2)

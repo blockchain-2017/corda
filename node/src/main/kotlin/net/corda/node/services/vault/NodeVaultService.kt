@@ -282,14 +282,15 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
                         val entityClasses = criteriaParser.deriveEntities(globalCriteria)
 
                         val table1txId = VaultSchema.VaultStates::txId
-                        val table2txId = VaultSchema.VaultLinearState::txId
                         val table1index = VaultSchema.VaultStates::index
-                        val table2index = VaultSchema.VaultLinearState::index
 
                         val query = select(VaultSchema.VaultStates::class)
                         if (entityClasses.size > 1) {
+                            val attributeTxId = QueryCriteriaParser.findAttribute(entityClasses[1] as Class<Requery.PersistentState>, Requery.PersistentState::txId)
+                            val attributeIndex = QueryCriteriaParser.findAttribute(entityClasses[1] as Class<Requery.PersistentState>, Requery.PersistentState::index)
                             query.join(entityClasses[1].kotlin)
-                                    .on(table1txId.eq(table2txId).and(table1index.eq(table2index)))
+                                    .on(table1txId.eq(attributeTxId)
+                                            .and(table1index.eq(attributeIndex)))
                         }
 
                         // parse criteria
