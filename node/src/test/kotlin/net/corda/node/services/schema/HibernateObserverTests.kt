@@ -13,6 +13,7 @@ import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 import net.corda.core.utilities.LogHelper
 import net.corda.node.services.api.SchemaService
+import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.schema.HibernateObserver
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
@@ -110,7 +111,7 @@ class HibernateObserverTests {
         }
 
         @Suppress("UNUSED_VARIABLE")
-        val observer = HibernateObserver(rawUpdatesPublisher, schemaService)
+        val observer = HibernateObserver(rawUpdatesPublisher, HibernateConfiguration(schemaService))
         database.transaction {
             rawUpdatesPublisher.onNext(Vault.Update(emptySet(), setOf(StateAndRef(TransactionState(TestState(), MEGA_CORP), StateRef(SecureHash.sha256("dummy"), 0)))))
             val parentRowCountResult = TransactionManager.current().connection.prepareStatement("select count(*) from contract_Parents").executeQuery()

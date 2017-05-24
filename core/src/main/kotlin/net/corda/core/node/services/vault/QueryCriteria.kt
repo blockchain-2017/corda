@@ -1,6 +1,5 @@
 package net.corda.core.node.services.vault
 
-import io.requery.query.LogicalCondition
 import net.corda.core.contracts.Commodity
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateRef
@@ -22,7 +21,7 @@ import kotlin.reflect.KMutableProperty1
 @CordaSerializable
 sealed class QueryCriteria {
 
-    abstract fun visit(parser: IQueryCriteriaParser) : LogicalCondition<*,*>
+    abstract fun visit(parser: IQueryCriteriaParser)
 
     /**
      * VaultQueryCriteria: provides query by attributes defined in [VaultSchema.VaultStates]
@@ -36,8 +35,8 @@ sealed class QueryCriteria {
             val timeCondition: Logical<TimeInstantType, Array<Instant>>? = null,
             val participantIdentities: List<X500Name>? = null) : QueryCriteria() {
 
-        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
-            return parser.parseCriteria(this)
+        override fun visit(parser: IQueryCriteriaParser) {
+            parser.parseCriteria(this)
         }
     }
 
@@ -49,8 +48,8 @@ sealed class QueryCriteria {
             val dealRef: List<String>? = null,
             val dealPartyName: List<X500Name>? = null) : QueryCriteria() {
 
-        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
-            return parser.parseCriteria(this)
+        override fun visit(parser: IQueryCriteriaParser) {
+            parser.parseCriteria(this)
         }
     }
 
@@ -70,8 +69,8 @@ sealed class QueryCriteria {
             val issuerRef: List<OpaqueBytes>? = null,
             val exitKeyIdentity: List<X500Name>? = null) : QueryCriteria() {
 
-       override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
-           return parser.parseCriteria(this)
+       override fun visit(parser: IQueryCriteriaParser) {
+           parser.parseCriteria(this)
        }
    }
 
@@ -88,25 +87,25 @@ sealed class QueryCriteria {
      */
     data class VaultCustomQueryCriteria<L: Any, R>(val indexExpression: Logical<KMutableProperty1<L,R>, out R>) : QueryCriteria() {
 
-        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
-            return parser.parseCriteria(this)
+        override fun visit(parser: IQueryCriteriaParser) {
+            parser.parseCriteria(this)
         }
     }
     // enable composition of [QueryCriteria]
     data class AndComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
 
-        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
-            val left: LogicalCondition<*,*> = parser.parse(this.a)
-            val right: LogicalCondition<*,*> = parser.parse(this.b)
-            return left.and(right)
+        override fun visit(parser: IQueryCriteriaParser) {
+            parser.parse(this.a)
+            parser.parse(this.b)
+//            return left.and(right)
         }
     }
 
     data class OrComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
-        override fun visit(parser: IQueryCriteriaParser): LogicalCondition<*, *> {
-            val left: LogicalCondition<*,*> = parser.parse(this.a)
-            val right: LogicalCondition<*,*> = parser.parse(this.b)
-            return left.or(right)
+        override fun visit(parser: IQueryCriteriaParser) {
+            parser.parse(this.a)
+            parser.parse(this.b)
+//            return left.or(right)
         }
     }
 
@@ -119,12 +118,12 @@ sealed class QueryCriteria {
 }
 
 interface IQueryCriteriaParser {
-    fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): LogicalCondition<*, *>
-    fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): LogicalCondition<*, *>
-    fun <L: Any,R> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): LogicalCondition<*, *>
-    fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): LogicalCondition<*, *>
+    fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria)
+    fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria)
+    fun <L: Any,R> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>)
+    fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria)
 
-    fun parse(criteria: QueryCriteria) : LogicalCondition<*,*>
+    fun parse(criteria: QueryCriteria)
 }
 
 infix fun QueryCriteria.and(criteria: QueryCriteria): QueryCriteria = AndComposition(this, criteria)

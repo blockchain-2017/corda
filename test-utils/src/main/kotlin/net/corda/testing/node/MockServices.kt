@@ -14,6 +14,7 @@ import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_CA
 import net.corda.core.utilities.DUMMY_NOTARY
+import net.corda.node.services.database.HibernateConfiguration
 import net.corda.core.utilities.DUMMY_NOTARY_IDENTITY
 import net.corda.core.utilities.getTestPartyAndCertificate
 import net.corda.node.services.identity.InMemoryIdentityService
@@ -80,7 +81,7 @@ open class MockServices(varargval keys: KeyPair ) : ServiceHub {constructor() : 
     fun makeVaultService(dataSourceProps: Properties): VaultService {
         val vaultService = NodeVaultService(this, dataSourceProps)
         // Vault cash spending requires access to contract_cash_states and their updates
-        HibernateObserver(vaultService.rawUpdates, NodeSchemaService())
+        HibernateObserver(vaultService.rawUpdates, HibernateConfiguration(NodeSchemaService()))
         return vaultService
     }
 

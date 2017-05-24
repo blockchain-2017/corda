@@ -1,7 +1,8 @@
 package net.corda.core.node.services.vault
 
+import net.corda.core.contracts.ContractState
+import net.corda.core.contracts.StateRef
 import net.corda.core.serialization.CordaSerializable
-import kotlin.reflect.KProperty1
 
 @CordaSerializable
 enum class Operator {
@@ -29,12 +30,12 @@ interface Condition<L, R> {
 }
 
 interface AndOr<out Q> {
-    infix fun <V> and(condition: Condition<V, *>): Q
-    infix fun <V> or(condition: Condition<V, *>): Q
+    infix fun <V> and(condition: Condition<V, *>): Logical<*, *>
+    infix fun <V> or(condition: Condition<V, *>): Logical<*, *>
 }
 
 @CordaSerializable
-sealed class Logical<L, R> : Condition<L, R>
+sealed class Logical<L, R> : Condition<L, R>, AndOr<L>
 
 class LogicalExpression<L, R>(leftOperand: L,
                               operator: Operator,
@@ -53,6 +54,14 @@ class LogicalExpression<L, R>(leftOperand: L,
     override val operator: Operator = operator
     override val rightOperand: R = rightOperand as R
     override val leftOperand: L = leftOperand
+
+    override fun <V> and(condition: Condition<V, *>): Logical<*, *> {
+        return LogicalExpression(this, Operator.AND, condition)
+    }
+
+    override fun <V> or(condition: Condition<V, *>): Logical<*, *> {
+        return LogicalExpression(this, Operator.OR, condition)
+    }
 }
 
 
@@ -110,5 +119,21 @@ data class Sort(val columns: Collection<SortColumn>) {
 //                               val columnName: KProperty1<T,out R>,
                           val direction: Sort.Direction = Sort.Direction.ASC,
                           val nullHandling: Sort.NullHandling = if (direction == Sort.Direction.ASC) Sort.NullHandling.NULLS_LAST else Sort.NullHandling.NULLS_FIRST)
+}
+
+/**
+ * Helper method to generate a string formatted list of Composite Keys for Requery Expression clause
+ */
+fun stateRefArgs(stateRefs: List<StateRef>): List<List<Any>> {
+    return stateRefs.map { listOf("'${it.txhash}'", it.index) }
+}
+
+inline fun <reified T: ContractState> deriveContractTypes(): Set<Class<out ContractState>> = deriveContractTypes(T::class.java)
+
+fun <T: ContractState> deriveContractTypes(contractType: Class<T>?): Set<Class<out ContractState>> {
+    if (contractType == null)
+        return setOf(ContractState::class.java)
+    else
+        return setOf(contractType)
 }
 

@@ -5,6 +5,7 @@ import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.node.services.api.SchemaService
+import net.corda.node.services.vault.VaultSchemaV1
 import net.corda.schemas.CashSchemaV1
 
 /**
@@ -21,7 +22,8 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
     // Whitelisted tables are those required by internal Corda services
     // For example, cash is used by the vault for coin selection
     // This whitelist will grow as we add further functionality (eg. other fungible assets)
-    override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = mapOf(Pair(CashSchemaV1, SchemaService.SchemaOptions()))
+    override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = mapOf(Pair(CashSchemaV1, SchemaService.SchemaOptions()),
+                                                                                       Pair(VaultSchemaV1, SchemaService.SchemaOptions(tablePrefix = "vault_")))
 
     // Currently returns all schemas supported by the state, with no filtering or enrichment.
     override fun selectSchemas(state: QueryableState): Iterable<MappedSchema> {

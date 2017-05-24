@@ -10,7 +10,7 @@ import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
 import org.junit.Before
 
-class RequeryVaultQueryTests : VaultQueryTests() {
+class HibernateVaultQueryTests : VaultQueryTests() {
 
     @Before
     fun setUp() {
@@ -29,7 +29,7 @@ class RequeryVaultQueryTests : VaultQueryTests() {
                     // Refactored to use notifyAll() as we have no other unit test for that method with multiple transactions.
                     vaultService.notifyAll(txs.map { it.tx })
                 }
-                override val vaultQueryService : VaultQueryService = RequeryVaultQueryServiceImpl(dataSourceProps)
+                override val vaultQueryService : VaultQueryService = HibernateVaultQueryImpl()
             }
         }
     }

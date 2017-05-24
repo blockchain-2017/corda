@@ -2,12 +2,12 @@ package net.corda.node.services.vault
 
 import co.paralleluniverse.fibers.Suspendable
 import co.paralleluniverse.strands.Strand
-import io.requery.Persistable
 import io.requery.PersistenceException
 import io.requery.TransactionIsolation
-import io.requery.kotlin.*
-import io.requery.query.Condition
-import io.requery.query.OrderingExpression
+import io.requery.kotlin.`in`
+import io.requery.kotlin.eq
+import io.requery.kotlin.isNull
+import io.requery.kotlin.notNull
 import io.requery.query.RowExpression
 import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.OnLedgerAsset
@@ -24,8 +24,6 @@ import net.corda.core.node.services.StatesNotAvailableException
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultService
 import net.corda.core.node.services.unconsumedStates
-import net.corda.core.node.services.vault.*
-import net.corda.core.schemas.requery.Requery
 import net.corda.core.serialization.*
 import net.corda.core.tee
 import net.corda.core.transactions.TransactionBuilder
@@ -35,7 +33,10 @@ import net.corda.core.utilities.trace
 import net.corda.node.services.Models
 import net.corda.node.services.database.RequeryConfiguration
 import net.corda.node.services.statemachine.FlowStateMachineImpl
-import net.corda.node.services.vault.schemas.*
+import net.corda.node.services.vault.schemas.VaultCashBalancesEntity
+import net.corda.node.services.vault.schemas.VaultSchema
+import net.corda.node.services.vault.schemas.VaultStatesEntity
+import net.corda.node.services.vault.schemas.VaultTxnNoteEntity
 import net.corda.node.utilities.bufferUntilDatabaseCommit
 import net.corda.node.utilities.wrapWithDatabaseTransaction
 import rx.Observable

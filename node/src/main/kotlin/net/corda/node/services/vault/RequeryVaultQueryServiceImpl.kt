@@ -30,13 +30,12 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
 
     val configuration = RequeryConfiguration(dataSourceProperties, true)
     val session = configuration.sessionForModel(Models.VAULT)
+
     @Throws(VaultQueryException::class, InvalidQueryCriteriaException::class, InvalidQueryOperatorException::class, UnsupportedQueryException::class)
     override fun <T : ContractState> _queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.Page<T> {
 
-        val criteriaParser = RequeryQueryCriteriaParser(contractTypeMappings)
-
         // set defaults: UNCONSUMED, ContractTypes
-        val contractTypes = criteriaParser.deriveContractTypes(contractType)
+        val contractTypes = deriveContractTypes(contractType)
         val globalCriteria =
                 if (criteria is QueryCriteria.VaultQueryCriteria) {
                     val combinedContractStateTypes = criteria.contractStateTypes?.plus(contractTypes) ?: contractTypes
@@ -44,10 +43,14 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
                 } else {
                     criteria.and(QueryCriteria.VaultQueryCriteria(status = Vault.StateStatus.UNCONSUMED, contractStateTypes = contractTypes))
                 }
-
+        val contractTypeMappings = contractTypeMappings
         try {
             val page =
                     session.withTransaction(TransactionIsolation.REPEATABLE_READ) {
+
+                        val query = select(VaultSchema.VaultStates::class)
+
+                        val criteriaParser = RequeryQueryCriteriaParser(contractTypeMappings, query)
 
                         // derive entity classes to use in select / join
                         val entityClasses = criteriaParser.deriveEntities(globalCriteria)
@@ -55,7 +58,7 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
                         val table1txId = VaultSchema.VaultStates::txId
                         val table1index = VaultSchema.VaultStates::index
 
-                        val query = select(VaultSchema.VaultStates::class)
+
                         if (entityClasses.size > 1) {
                             val attributeTxId = RequeryQueryCriteriaParser.findAttribute(entityClasses[1] as Class<Requery.PersistentState>, Requery.PersistentState::txId)
                             val attributeIndex = RequeryQueryCriteriaParser.findAttribute(entityClasses[1] as Class<Requery.PersistentState>, Requery.PersistentState::index)
@@ -65,8 +68,7 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
                         }
 
                         // parse criteria
-                        val conditions = criteriaParser.parse(globalCriteria)
-                        query.where(conditions)
+                        criteriaParser.parse(globalCriteria)
 
                         // Pagination
                         if (paging.pageNumber < 0) throw VaultQueryException("Page specification: invalid page number ${paging.pageNumber} [page numbers start from 0]")

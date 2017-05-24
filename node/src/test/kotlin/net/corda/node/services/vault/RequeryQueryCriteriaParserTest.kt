@@ -1,5 +1,7 @@
 package net.corda.node.services.vault
 
+import io.requery.Persistable
+import io.requery.sql.KotlinEntityDataStore
 import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.DUMMY_CASH_ISSUER
 import net.corda.contracts.testing.fillWithSomeTestCash
@@ -14,10 +16,12 @@ import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.TEST_TX_TIME
+import net.corda.node.services.Models
 import net.corda.node.services.contract.schemas.CashSchemaV2
 import net.corda.node.services.contract.schemas.CommercialPaperSchemaV3
 import net.corda.node.services.contract.schemas.CommercialPaperSchemaV4
 import net.corda.node.services.contract.schemas.DummyLinearStateSchemaV2
+import net.corda.node.services.database.RequeryConfiguration
 import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
@@ -40,6 +44,7 @@ class RequeryQueryCriteriaParserTest {
     lateinit var services: MockServices
     lateinit var dataSource: Closeable
     lateinit var database: Database
+    lateinit var requerySession: KotlinEntityDataStore<Persistable>
 
     // Contract states
     lateinit var linearStates: Iterable<StateAndRef<LinearState>>
@@ -54,8 +59,6 @@ class RequeryQueryCriteriaParserTest {
     private val DEAL_REF1 = "123"
     private val DEAL_REF2 = "456"
     private val DEAL_REF3 = "789"
-
-    lateinit var criteriaParse: RequeryQueryCriteriaParser
 
     @Before
     fun setUp() {
@@ -85,10 +88,10 @@ class RequeryQueryCriteriaParserTest {
                     .plus(services.fillWithSomeTestLinearStates(2, linearId2, participants = listOf(MEGA_CORP_PUBKEY, MINI_CORP_PUBKEY)).states.toList())
             dealStates = services.fillWithSomeTestDeals(listOf(DEAL_REF1), parties = listOf(MEGA_CORP.toAnonymous(), BIG_CORP.toAnonymous())).states.toList()
                    .plus(services.fillWithSomeTestDeals(listOf(DEAL_REF2, DEAL_REF3), parties = listOf(BIG_CORP.toAnonymous(), MINI_CORP.toAnonymous())).states)
-
         }
 
-        criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)))
+        val requeryConfig = RequeryConfiguration(dataSourceProps, true)
+        requerySession = requeryConfig.sessionForModel(Models.VAULT)
     }
 
     @After
@@ -102,7 +105,7 @@ class RequeryQueryCriteriaParserTest {
 
     @Test
     fun `contract state types`() {
-        val contractStateTypes = criteriaParse.deriveContractTypes<Cash.State>()
+        val contractStateTypes = deriveContractTypes<Cash.State>()
         assertThat(contractStateTypes).hasSize(1)
         assertThat(contractStateTypes.first()).isEqualTo(Cash.State::class.java)
     }
@@ -110,147 +113,175 @@ class RequeryQueryCriteriaParserTest {
     @Test
     fun `derive contract state entities`() {
 
-        // Fungible criteria (Cash)
-        val criteriaFungible = QueryCriteria.FungibleAssetQueryCriteria()
-        val contractStateEntitiesFungible = criteriaParse.deriveEntities(criteriaFungible)
-        assertThat(contractStateEntitiesFungible).hasSize(2)
-        assertThat(contractStateEntitiesFungible[0]).isEqualTo(VaultSchema.VaultStates::class.java)
-        assertThat(contractStateEntitiesFungible[1]).isEqualTo(CashSchemaV2.PersistentCashState2::class.java)
+        requerySession.invoke {
 
-        // Linear State (DummyLinearState)
-        val criteria = QueryCriteria.LinearStateQueryCriteria()
-        val contractStateEntities = criteriaParse.deriveEntities(criteria)
-        assertThat(contractStateEntities).hasSize(2)
-        assertThat(contractStateEntities[0]).isEqualTo(VaultSchema.VaultStates::class.java)
-        assertThat(contractStateEntities[1]).isEqualTo(DummyLinearStateSchemaV2.PersistentDummyLinearState2::class.java)
+            val query = select(VaultSchema.VaultStates::class)
+            val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
 
-        // Commercial Paper
-        val expressionCustom = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
+            // Fungible criteria (Cash)
+            val criteriaFungible = QueryCriteria.FungibleAssetQueryCriteria()
+            val contractStateEntitiesFungible = criteriaParse.deriveEntities(criteriaFungible)
+            assertThat(contractStateEntitiesFungible).hasSize(2)
+            assertThat(contractStateEntitiesFungible[0]).isEqualTo(VaultSchema.VaultStates::class.java)
+            assertThat(contractStateEntitiesFungible[1]).isEqualTo(CashSchemaV2.PersistentCashState2::class.java)
 
-        val criteriaCustom = QueryCriteria.VaultCustomQueryCriteria(expressionCustom)
-        val contractStateEntitiesCustom = criteriaParse.deriveEntities(criteriaCustom)
-        assertThat(contractStateEntitiesCustom).hasSize(2)
-        assertThat(contractStateEntitiesCustom[0]).isEqualTo(VaultSchema.VaultStates::class.java)
-        assertThat(contractStateEntitiesCustom[1]).isEqualTo(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
+            // Linear State (DummyLinearState)
+            val criteria = QueryCriteria.LinearStateQueryCriteria()
+            val contractStateEntities = criteriaParse.deriveEntities(criteria)
+            assertThat(contractStateEntities).hasSize(2)
+            assertThat(contractStateEntities[0]).isEqualTo(VaultSchema.VaultStates::class.java)
+            assertThat(contractStateEntities[1]).isEqualTo(DummyLinearStateSchemaV2.PersistentDummyLinearState2::class.java)
 
+            // Commercial Paper
+            val expressionCustom = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
 
+            val criteriaCustom = QueryCriteria.VaultCustomQueryCriteria(expressionCustom)
+            val contractStateEntitiesCustom = criteriaParse.deriveEntities(criteriaCustom)
+            assertThat(contractStateEntitiesCustom).hasSize(2)
+            assertThat(contractStateEntitiesCustom[0]).isEqualTo(VaultSchema.VaultStates::class.java)
+            assertThat(contractStateEntitiesCustom[1]).isEqualTo(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
+        }
     }
 
     @Test
     fun parseVaultQueryCriteria() {
 
-        val status = Vault.StateStatus.UNCONSUMED
-        val criteria1 = QueryCriteria.VaultQueryCriteria(status = status)
-        criteriaParse.parse(criteria1)
+        requerySession.invoke {
 
-        val stateRefs = cashStates
-        val criteria2 = QueryCriteria.VaultQueryCriteria(stateRefs = stateRefs)
-        criteriaParse.parse(criteria2)
+            val query = select(VaultSchema.VaultStates::class)
+            val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
 
-        val contractStateTypes = setOf(Cash.State::class.java, DealState::class.java)
-        val criteria3 = QueryCriteria.VaultQueryCriteria(contractStateTypes = contractStateTypes)
-        criteriaParse.parse(criteria3)
+            val status = Vault.StateStatus.UNCONSUMED
+            val criteria1 = QueryCriteria.VaultQueryCriteria(status = status)
+            criteriaParse.parse(criteria1)
 
-        val notaryName = listOf(DUMMY_NOTARY.name)
-        val criteria4 = QueryCriteria.VaultQueryCriteria(notaryName = notaryName)
-        criteriaParse.parse(criteria4)
+            val stateRefs = cashStates
+            val criteria2 = QueryCriteria.VaultQueryCriteria(stateRefs = stateRefs)
+            criteriaParse.parse(criteria2)
 
-        val criteria5 = QueryCriteria.VaultQueryCriteria(includeSoftlockedStates = false)
-        criteriaParse.parse(criteria5)
+            val contractStateTypes = setOf(Cash.State::class.java, DealState::class.java)
+            val criteria3 = QueryCriteria.VaultQueryCriteria(contractStateTypes = contractStateTypes)
+            criteriaParse.parse(criteria3)
 
-        val participants = listOf(MEGA_CORP.name, MINI_CORP.name)
-        val criteria6 = QueryCriteria.VaultQueryCriteria(participantIdentities = participants)
-        criteriaParse.parse(criteria6)
+            val notaryName = listOf(DUMMY_NOTARY.name)
+            val criteria4 = QueryCriteria.VaultQueryCriteria(notaryName = notaryName)
+            criteriaParse.parse(criteria4)
 
-        val start = TEST_TX_TIME
-        val end = TEST_TX_TIME.plus(30, ChronoUnit.DAYS)
-        val recordedBetweenExpression = LogicalExpression(QueryCriteria.TimeInstantType.RECORDED, Operator.BETWEEN, arrayOf(start, end))
-        val criteria7 = QueryCriteria.VaultQueryCriteria(timeCondition = recordedBetweenExpression)
-        criteriaParse.parse(criteria7)
+            val criteria5 = QueryCriteria.VaultQueryCriteria(includeSoftlockedStates = false)
+            criteriaParse.parse(criteria5)
 
-        val criteriaAnd = criteria1.and(criteria2)
-        criteriaParse.parse(criteriaAnd)
+            val participants = listOf(MEGA_CORP.name, MINI_CORP.name)
+            val criteria6 = QueryCriteria.VaultQueryCriteria(participantIdentities = participants)
+            criteriaParse.parse(criteria6)
 
-        val criteriaOr = criteria4.or(criteria6)
-        criteriaParse.parse(criteriaOr)
+            val start = TEST_TX_TIME
+            val end = TEST_TX_TIME.plus(30, ChronoUnit.DAYS)
+            val recordedBetweenExpression = LogicalExpression(QueryCriteria.TimeInstantType.RECORDED, Operator.BETWEEN, arrayOf(start, end))
+            val criteria7 = QueryCriteria.VaultQueryCriteria(timeCondition = recordedBetweenExpression)
+            criteriaParse.parse(criteria7)
 
-        fail()
+            val criteriaAnd = criteria1.and(criteria2)
+            criteriaParse.parse(criteriaAnd)
+
+            val criteriaOr = criteria4.or(criteria6)
+            criteriaParse.parse(criteriaOr)
+
+            fail()
+        }
     }
 
     @Test
     fun parseLinearStateQueryCriteria() {
 
-        val linearIds = linearStates.map { it.state.data.linearId }
-        val criteria1 = QueryCriteria.LinearStateQueryCriteria(linearId = linearIds)
-        criteriaParse.parse(criteria1)
+        requerySession.invoke {
 
-        val dealRefs = listOf(DEAL_REF1, DEAL_REF2)
-        val criteria2 = QueryCriteria.LinearStateQueryCriteria(dealRef = dealRefs)
-        criteriaParse.parse(criteria2)
+            val query = select(VaultSchema.VaultStates::class)
+            val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
 
-        val dealParties = listOf(MEGA_CORP.name, MINI_CORP.name)
-        val criteria3 = QueryCriteria.LinearStateQueryCriteria(dealPartyName = dealParties)
-        criteriaParse.parse(criteria3)
+            val linearIds = linearStates.map { it.state.data.linearId }
+            val criteria1 = QueryCriteria.LinearStateQueryCriteria(linearId = linearIds)
+            criteriaParse.parse(criteria1)
 
-        val criteriaAnd = criteria1.and(criteria2)
-        criteriaParse.parse(criteriaAnd)
+            val dealRefs = listOf(DEAL_REF1, DEAL_REF2)
+            val criteria2 = QueryCriteria.LinearStateQueryCriteria(dealRef = dealRefs)
+            criteriaParse.parse(criteria2)
 
-        val criteriaOr = criteria2.or(criteria3)
-        criteriaParse.parse(criteriaOr)
+            val dealParties = listOf(MEGA_CORP.name, MINI_CORP.name)
+            val criteria3 = QueryCriteria.LinearStateQueryCriteria(dealPartyName = dealParties)
+            criteriaParse.parse(criteria3)
 
-        fail()
+            val criteriaAnd = criteria1.and(criteria2)
+            criteriaParse.parse(criteriaAnd)
+
+            val criteriaOr = criteria2.or(criteria3)
+            criteriaParse.parse(criteriaOr)
+
+            fail()
+        }
     }
 
     @Test
     fun FungibleAssetQueryCriteria() {
 
-        val owners = listOf(MINI_CORP.name)
-        val criteria1 = QueryCriteria.FungibleAssetQueryCriteria(ownerIdentity = owners)
-        criteriaParse.parse(criteria1)
+        requerySession.invoke {
 
-        val tokenTypes = listOf(Currency::class.java)
-        val criteria2 = QueryCriteria.FungibleAssetQueryCriteria(tokenType = tokenTypes)
-        criteriaParse.parse(criteria2)
+            val query = select(VaultSchema.VaultStates::class)
+            val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
 
-        val tokenValues = listOf(GBP.currencyCode, USD.currencyCode)
-        val criteria3 = QueryCriteria.FungibleAssetQueryCriteria(tokenValue = tokenValues)
-        criteriaParse.parse(criteria3)
+            val owners = listOf(MINI_CORP.name)
+            val criteria1 = QueryCriteria.FungibleAssetQueryCriteria(ownerIdentity = owners)
+            criteriaParse.parse(criteria1)
 
-        val quantityExpression = LogicalExpression(this, Operator.GREATER_THAN, 50L)
-        val criteria4 = QueryCriteria.FungibleAssetQueryCriteria(quantity = quantityExpression)
-        criteriaParse.parse(criteria4)
+            val tokenTypes = listOf(Currency::class.java)
+            val criteria2 = QueryCriteria.FungibleAssetQueryCriteria(tokenType = tokenTypes)
+            criteriaParse.parse(criteria2)
 
-        val issuerPartyNames = listOf(BOC.name)
-        val criteria5 = QueryCriteria.FungibleAssetQueryCriteria(issuerPartyName = issuerPartyNames)
-        criteriaParse.parse(criteria5)
+            val tokenValues = listOf(GBP.currencyCode, USD.currencyCode)
+            val criteria3 = QueryCriteria.FungibleAssetQueryCriteria(tokenValue = tokenValues)
+            criteriaParse.parse(criteria3)
 
-        val issuerPartyRefs = listOf(BOC.ref(1).reference)
-        val criteria6 = QueryCriteria.FungibleAssetQueryCriteria(issuerRef = issuerPartyRefs)
-        criteriaParse.parse(criteria6)
+            val quantityExpression = LogicalExpression(this, Operator.GREATER_THAN, 50L)
+            val criteria4 = QueryCriteria.FungibleAssetQueryCriteria(quantity = quantityExpression)
+            criteriaParse.parse(criteria4)
 
-        val exitKeyIds = listOf(getTestX509Name("TEST"))
-        val criteria7 = QueryCriteria.FungibleAssetQueryCriteria(exitKeyIdentity = exitKeyIds)
-        criteriaParse.parse(criteria7)
+            val issuerPartyNames = listOf(BOC.name)
+            val criteria5 = QueryCriteria.FungibleAssetQueryCriteria(issuerPartyName = issuerPartyNames)
+            criteriaParse.parse(criteria5)
 
-        val criteriaAnd = criteria2.and(criteria3)
-        criteriaParse.parse(criteriaAnd)
+            val issuerPartyRefs = listOf(BOC.ref(1).reference)
+            val criteria6 = QueryCriteria.FungibleAssetQueryCriteria(issuerRef = issuerPartyRefs)
+            criteriaParse.parse(criteria6)
 
-        val criteriaOr = criteria1.or(criteria4)
-        criteriaParse.parse(criteriaOr)
+            val exitKeyIds = listOf(getTestX509Name("TEST"))
+            val criteria7 = QueryCriteria.FungibleAssetQueryCriteria(exitKeyIdentity = exitKeyIds)
+            criteriaParse.parse(criteria7)
 
-        fail()
+            val criteriaAnd = criteria2.and(criteria3)
+            criteriaParse.parse(criteriaAnd)
+
+            val criteriaOr = criteria1.or(criteria4)
+            criteriaParse.parse(criteriaOr)
+
+            fail()
+        }
     }
 
     /** Commercial Paper V1 (Hibernate JPA */
     @Test
     fun VaultCustomQueryCriteriaSingleExpression() {
 
-        // Commercial Paper
-        val expression = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
-        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
-        criteriaParse.parse(criteria1)
+        requerySession.invoke {
 
-        fail()
+            val query = select(VaultSchema.VaultStates::class)
+            val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
+
+            // Commercial Paper
+            val expression = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
+            val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
+            criteriaParse.parse(criteria1)
+
+            fail()
+        }
     }
 
     /** Commercial Paper V2 (Requery JPA) */
@@ -269,41 +300,57 @@ class RequeryQueryCriteriaParserTest {
     @Test
     fun VaultCustomQueryCriteriaSingleExpressionInterface() {
 
-        // Commercial Paper
-        val expression = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
-        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
+        requerySession.invoke {
 
-        val requeryExpr = criteriaParse.parseCriteria(criteria1)
-        assertThat(requeryExpr.operator).isEqualTo(io.requery.query.Operator.EQUAL)
+            val query = select(VaultSchema.VaultStates::class)
+            val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
 
+            // Commercial Paper
+            val expression = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
+            val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
+
+            criteriaParse.parseCriteria(criteria1)
+        }
     }
 
     /** Commercial Paper V4 (Requery Kotlin data class) */
     @Test
     fun VaultCustomQueryCriteriaSingleExpressionDataClass() {
 
-        // Commercial Paper
-        val expression = LogicalExpression(CommercialPaperSchemaV4.PersistentCommercialPaperState4::currency, Operator.EQUAL, USD.currencyCode)
-        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
-        criteriaParse.parse(criteria1)
+        requerySession.invoke {
 
-        fail()
+            val query = select(VaultSchema.VaultStates::class)
+            val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
+
+            // Commercial Paper
+            val expression = LogicalExpression(CommercialPaperSchemaV4.PersistentCommercialPaperState4::currency, Operator.EQUAL, USD.currencyCode)
+            val criteria1 = QueryCriteria.VaultCustomQueryCriteria(expression)
+            criteriaParse.parse(criteria1)
+
+            fail()
+        }
     }
 
     @Test
     fun VaultCustomQueryCriteriaCombinedExpressions() {
 
-        // Commercial Paper
-        val ccyExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
-        val maturityExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
-        val faceValueExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
+        requerySession.invoke {
 
-        val criteria1 = QueryCriteria.VaultCustomQueryCriteria(ccyExpr)
-        val criteria2 = QueryCriteria.VaultCustomQueryCriteria(maturityExpr)
-        val criteria3 = QueryCriteria.VaultCustomQueryCriteria(faceValueExpr)
-        criteriaParse.parse(criteria1.and(criteria2).or(criteria3))
+            val query = select(VaultSchema.VaultStates::class)
+            val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
 
-        fail()
+            // Commercial Paper
+            val ccyExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
+            val maturityExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
+            val faceValueExpr = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
+
+            val criteria1 = QueryCriteria.VaultCustomQueryCriteria(ccyExpr)
+            val criteria2 = QueryCriteria.VaultCustomQueryCriteria(maturityExpr)
+            val criteria3 = QueryCriteria.VaultCustomQueryCriteria(faceValueExpr)
+            criteriaParse.parse(criteria1.and(criteria2).or(criteria3))
+
+            fail()
+        }
     }
 
     @Test

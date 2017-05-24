@@ -1,25 +1,23 @@
 package net.corda.node.services.vault
 
 import io.requery.kotlin.*
+import io.requery.kotlin.Selection
 import io.requery.meta.Attribute
 import io.requery.meta.AttributeBuilder
 import io.requery.meta.AttributeDelegate
 import io.requery.meta.Type
-import io.requery.query.Expression
-import io.requery.query.LogicalCondition
-import io.requery.query.OrderingExpression
-import io.requery.query.RowExpression
+import io.requery.query.*
 import net.corda.core.contracts.ContractState
-import net.corda.core.contracts.StateRef
 import net.corda.core.crypto.commonName
 import net.corda.core.flows.FlowException
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.Logical
+import net.corda.core.node.services.vault.Operator
 import net.corda.core.schemas.StatePersistable
 import net.corda.core.utilities.loggerFor
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV3
 import net.corda.node.services.contract.schemas.CashSchemaV2
+import net.corda.node.services.contract.schemas.CommercialPaperSchemaV3
 import net.corda.node.services.contract.schemas.DummyLinearStateSchemaV2
 import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.services.vault.schemas.VaultStatesEntity
@@ -28,7 +26,7 @@ import java.time.Instant
 import kotlin.reflect.KProperty1
 import kotlin.reflect.jvm.javaMethod
 
-class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>) : IQueryCriteriaParser {
+class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>, val query: Selection<out Result<VaultSchema.VaultStates>>) : IQueryCriteriaParser {
 
     companion object {
         val log = loggerFor<RequeryQueryCriteriaParser>()
@@ -61,20 +59,11 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         }
     }
 
-    override fun parse(criteria: QueryCriteria) : LogicalCondition<*,*> {
-        return criteria.visit(this)
+    override fun parse(criteria: QueryCriteria) {
+        criteria.visit(this)
     }
 
-    inline fun <reified T: ContractState> deriveContractTypes(): Set<Class<out ContractState>> = deriveContractTypes(T::class.java)
-
-    fun <T: ContractState> deriveContractTypes(contractType: Class<T>?): Set<Class<out ContractState>> {
-        if (contractType == null)
-            return setOf(ContractState::class.java)
-        else
-            return setOf(contractType)
-    }
-
-    override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): LogicalCondition<*, *> {
+    override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) {
 
         // state status
         val attribute = findAttribute(VaultSchema.VaultStates::stateStatus).get()
@@ -129,7 +118,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
             throw UnsupportedQueryException("Unable to query on contract state participants until identity schemas defined")
         }
 
-        return chainedConditions
+        query.where(chainedConditions)
     }
 
     private fun parseOperator(property: KProperty1<VaultSchema.VaultStates, Instant?>, operator: Operator, value: Array<Instant>): io.requery.kotlin.Logical<out Expression<Instant?>, out Any?> {
@@ -147,7 +136,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         return condition
     }
 
-    override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): LogicalCondition<*, *> {
+    override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria) {
 
         // UNCONSUMED by default
         val attribute = findAttribute(VaultSchema.VaultStates::stateStatus).get()
@@ -181,10 +170,10 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         if (logicalCondition == null)
             throw InvalidQueryCriteriaException(QueryCriteria.LinearStateQueryCriteria::class.java)
 
-        return logicalCondition
+        query.where(logicalCondition)
     }
 
-    override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): LogicalCondition<*, *> {
+    override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) {
         criteria.tokenType
         criteria.tokenValue
         criteria.quantity
@@ -199,14 +188,11 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         val quantityExpr: Logical<*, Long>? = criteria.quantity
         quantityExpr?.let {
             val logicalCondition = attribute.greaterThan(it.rightOperand)
-            return logicalCondition
+            query.where(logicalCondition)
         }
-
-        throw UnsupportedQueryException("Specified criteria: $criteria")
-
     }
 
-    override fun <L: Any, R> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): LogicalCondition<*, *> {
+    override fun <L: Any, R> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>) {
 
         val logicalExpr = criteria.indexExpression
         val property = logicalExpr?.leftOperand!!
@@ -218,12 +204,25 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
                 when (logicalExpr?.operator) {
                     Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand)
                     Operator.GREATER_THAN_OR_EQUAL -> queryAttribute.gte(logicalExpr.rightOperand)
+//                    Operator.AND -> queryAttribute.and(logicalExpr.rightOperand)
+//                    Operator.OR -> queryAttribute.or(logicalExpr.rightOperand)
+                    Operator.NOT_EQUAL -> queryAttribute.ne(logicalExpr.rightOperand)
+                    Operator.LESS_THAN -> queryAttribute.lt(logicalExpr.rightOperand)
+                    Operator.LESS_THAN_OR_EQUAL -> queryAttribute.lte(logicalExpr.rightOperand)
+                    Operator.GREATER_THAN -> queryAttribute.gt(logicalExpr.rightOperand)
+                    Operator.IN -> queryAttribute.`in`(logicalExpr.rightOperand)
+                    Operator.NOT_IN -> queryAttribute.`notIn`(logicalExpr.rightOperand)
+                    Operator.LIKE -> queryAttribute.like(logicalExpr.rightOperand as String)
+                    Operator.NOT_LIKE -> queryAttribute.notLike(logicalExpr.rightOperand as String)
+//                    Operator.BETWEEN -> queryAttribute.between(logicalExpr.rightOperand)
+                    Operator.IS_NULL -> queryAttribute.isNull
+                    Operator.NOT_NULL -> queryAttribute.notNull()
                     else -> {
                         throw InvalidQueryOperatorException(logicalExpr!!.operator)
                     }
                 }
 
-        return logicalCondition
+        query.where(logicalCondition)
     }
 
     fun parseSorting(sortColumn: Sort.SortColumn): OrderingExpression<*> {
@@ -239,13 +238,6 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
                 }
 
         return orderingExpression
-    }
-
-    /**
-     * Helper method to generate a string formatted list of Composite Keys for Requery Expression clause
-     */
-    private fun stateRefArgs(stateRefs: List<StateRef>): List<List<Any>> {
-        return stateRefs.map { listOf("'${it.txhash}'", it.index) }
     }
 
     fun deriveEntities(criteria: QueryCriteria): List<Class<out StatePersistable>> {
