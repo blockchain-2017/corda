@@ -19,7 +19,7 @@ import net.corda.core.serialization.storageKryo
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.Models
 import net.corda.node.services.database.RequeryConfiguration
-import net.corda.node.services.vault.schemas.VaultSchema
+import net.corda.node.services.vault.schemas.requery.VaultSchema
 import java.util.*
 
 class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : SingletonSerializeAsToken(), VaultQueryService {

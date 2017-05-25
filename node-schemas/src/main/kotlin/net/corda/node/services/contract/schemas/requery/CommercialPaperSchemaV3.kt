@@ -1,9 +1,11 @@
-package net.corda.node.services.contract.schemas
+package net.corda.node.services.contract.schemas.requery
 
 import io.requery.*
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.requery.Requery
 import java.time.Instant
+
+object CommercialPaperSchema
 
 /**
  * Commercial paper contract schema entity definition using Kotlin interface classes

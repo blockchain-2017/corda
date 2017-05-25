@@ -17,12 +17,12 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.TEST_TX_TIME
 import net.corda.node.services.Models
-import net.corda.node.services.contract.schemas.CashSchemaV2
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV3
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV4
-import net.corda.node.services.contract.schemas.DummyLinearStateSchemaV2
+import net.corda.node.services.contract.schemas.requery.CashSchemaV2
+import net.corda.node.services.contract.schemas.requery.CommercialPaperSchemaV3
+import net.corda.node.services.contract.schemas.requery.CommercialPaperSchemaV4
+import net.corda.node.services.contract.schemas.requery.DummyLinearStateSchemaV2
 import net.corda.node.services.database.RequeryConfiguration
-import net.corda.node.services.vault.schemas.VaultSchema
+import net.corda.node.services.vault.schemas.requery.VaultSchema
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.CommercialPaperSchemaV1

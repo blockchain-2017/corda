@@ -7,6 +7,7 @@ import net.corda.core.node.services.vault.Operator
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.node.services.vault.stateRefArgs
 import net.corda.core.schemas.PersistentStateRef
+import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import org.bouncycastle.asn1.x500.X500Name
 import java.time.Instant
 import javax.persistence.criteria.CriteriaBuilder

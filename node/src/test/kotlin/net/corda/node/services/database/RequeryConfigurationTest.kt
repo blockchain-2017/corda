@@ -3,7 +3,6 @@ package net.corda.node.services.database
 import io.requery.Persistable
 import io.requery.kotlin.eq
 import io.requery.sql.KotlinEntityDataStore
-import junit.framework.Assert.assertTrue
 import net.corda.core.contracts.DummyContract
 import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.TransactionType
@@ -21,9 +20,9 @@ import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_PUBKEY_1
 import net.corda.node.services.Models
 import net.corda.node.services.persistence.DBTransactionStorage
-import net.corda.node.services.vault.schemas.VaultCashBalancesEntity
-import net.corda.node.services.vault.schemas.VaultSchema
-import net.corda.node.services.vault.schemas.VaultStatesEntity
+import net.corda.node.services.vault.schemas.requery.VaultCashBalancesEntity
+import net.corda.node.services.vault.schemas.requery.VaultSchema
+import net.corda.node.services.vault.schemas.requery.VaultStatesEntity
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.testing.node.makeTestDataSourceProperties
@@ -31,6 +30,7 @@ import org.assertj.core.api.Assertions
 import org.jetbrains.exposed.sql.Database
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.Closeable
@@ -130,10 +130,9 @@ class RequeryConfigurationTest {
         // insert 100 entities
         database.transaction {
             requerySession.withTransaction {
-                for (i in 1..100) {
-                    val txn = newTransaction(i)
-                    insert(createVaultStateEntity(txn))
-                }
+                (1..100)
+                        .map { newTransaction(it) }
+                        .forEach { insert(createVaultStateEntity(it)) }
             }
         }
 

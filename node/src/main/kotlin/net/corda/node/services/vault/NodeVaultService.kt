@@ -33,10 +33,10 @@ import net.corda.core.utilities.trace
 import net.corda.node.services.Models
 import net.corda.node.services.database.RequeryConfiguration
 import net.corda.node.services.statemachine.FlowStateMachineImpl
-import net.corda.node.services.vault.schemas.VaultCashBalancesEntity
-import net.corda.node.services.vault.schemas.VaultSchema
-import net.corda.node.services.vault.schemas.VaultStatesEntity
-import net.corda.node.services.vault.schemas.VaultTxnNoteEntity
+import net.corda.node.services.vault.schemas.requery.VaultCashBalancesEntity
+import net.corda.node.services.vault.schemas.requery.VaultSchema
+import net.corda.node.services.vault.schemas.requery.VaultStatesEntity
+import net.corda.node.services.vault.schemas.requery.VaultTxnNoteEntity
 import net.corda.node.utilities.bufferUntilDatabaseCommit
 import net.corda.node.utilities.wrapWithDatabaseTransaction
 import rx.Observable

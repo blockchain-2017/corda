@@ -10,29 +10,22 @@ import net.corda.core.node.services.VaultQueryService
 import net.corda.core.node.services.vault.PageSpecification
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.node.services.vault.Sort
-import net.corda.core.schemas.PersistentStateRef
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.storageKryo
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.database.HibernateConfiguration
-import net.corda.node.services.schema.NodeSchemaService
+import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import java.lang.Exception
-import sun.misc.MessageUtils.where
-import java.time.Instant
-import javax.persistence.Tuple
-import javax.persistence.criteria.CriteriaBuilder
 
 
-
-class HibernateVaultQueryImpl : SingletonSerializeAsToken(), VaultQueryService {
+class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : SingletonSerializeAsToken(), VaultQueryService {
 
     companion object {
         val log = loggerFor<HibernateVaultQueryImpl>()
     }
 
-    private val configuration = HibernateConfiguration(NodeSchemaService())
-    private val session = configuration.sessionFactoryForSchema(VaultSchemaV1)
+    private val session = hibernateConfig.sessionFactoryForSchema(VaultSchemaV1)
 
     @Throws(VaultQueryException::class)
     override fun <T : ContractState> _queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.Page<T> {
@@ -57,13 +50,9 @@ class HibernateVaultQueryImpl : SingletonSerializeAsToken(), VaultQueryService {
             query.firstResult = paging.pageNumber * paging.pageSize
             query.maxResults = paging.pageSize
 
-            val countQuery = cb.createQuery(Tuple::class.java)
-            countQuery.multiselect(cb.count(countQuery.from(VaultSchemaV1.VaultStates::class.java)),
-                                   vaultStates.get<PersistentStateRef>("stateRef"))
-            cb.greatest(vaultStates.get<Instant>("recordedTime"))
-            val countResult = session.createEntityManager().createQuery(countQuery).singleResult
-            val totalStates = countResult[0] as Int // count
-            val lastRecordedState = countResult[1] as PersistentStateRef // stateRef
+            val countQuery = cb.createQuery(Long::class.java)
+            countQuery.select(cb.count(countQuery.from(VaultSchemaV1.VaultStates::class.java)))
+            val totalStates = session.createEntityManager().createQuery(countQuery).singleResult.toInt()
 
             // sorting
             sorting.columns.map {

@@ -1,4 +1,4 @@
-package net.corda.node.services.contract.schemas
+package net.corda.node.services.contract.schemas.requery
 
 import io.requery.*
 import net.corda.core.schemas.MappedSchema

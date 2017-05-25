@@ -1,4 +1,4 @@
-package net.corda.node.services.vault
+package net.corda.node.services.vault.schemas.jpa
 
 import net.corda.core.node.services.Vault
 import net.corda.core.schemas.MappedSchema
@@ -20,8 +20,8 @@ object VaultSchema
  */
 object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1, mappedTypes = listOf(VaultStates::class.java)) {
     @Entity
-    @Table(name = "cash_states",
-            indexes = arrayOf(Index(name = "state_status_idx", columnList = "state_status")))
+    @Table(name = "vault_states",
+           indexes = arrayOf(Index(name = "state_status_idx", columnList = "state_status")))
     class VaultStates(
 
             /** refers to the notary a state is attached to */

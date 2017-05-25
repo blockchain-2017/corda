@@ -27,6 +27,9 @@ import net.corda.core.utilities.ALICE
 import net.corda.core.utilities.BOB
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
+import net.corda.core.utilities.*
+import net.corda.node.services.Models
+import net.corda.node.services.vault.schemas.requery.*
 import org.h2.jdbcx.JdbcDataSource
 import org.junit.After
 import org.junit.Assert

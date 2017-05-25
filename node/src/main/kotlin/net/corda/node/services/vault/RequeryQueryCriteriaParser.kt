@@ -16,11 +16,10 @@ import net.corda.core.node.services.vault.Logical
 import net.corda.core.node.services.vault.Operator
 import net.corda.core.schemas.StatePersistable
 import net.corda.core.utilities.loggerFor
-import net.corda.node.services.contract.schemas.CashSchemaV2
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV3
-import net.corda.node.services.contract.schemas.DummyLinearStateSchemaV2
-import net.corda.node.services.vault.schemas.VaultSchema
-import net.corda.node.services.vault.schemas.VaultStatesEntity
+import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
+import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
+import net.corda.node.services.vault.schemas.requery.VaultSchema
+import net.corda.node.services.vault.schemas.requery.VaultStatesEntity
 import org.bouncycastle.asn1.x500.X500Name
 import java.time.Instant
 import kotlin.reflect.KProperty1
@@ -245,19 +244,17 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         val entityClasses : MutableSet<Class<out StatePersistable>> = mutableSetOf()
 
         when (criteria) {
-            is QueryCriteria.VaultQueryCriteria -> println("SKIP")
-                // entityClasses.add(VaultSchema.VaultStates::class.java)
+            is QueryCriteria.VaultQueryCriteria ->
+                entityClasses.add(VaultSchemaV1.VaultStates::class.java)
 
             is QueryCriteria.FungibleAssetQueryCriteria ->
-                entityClasses.add(CashSchemaV2.PersistentCashState2::class.java)
+                entityClasses.add(CommonSchemaV1.FungibleState::class.java)
 
-            is QueryCriteria.LinearStateQueryCriteria -> {
-                entityClasses.add(DummyLinearStateSchemaV2.PersistentDummyLinearState2::class.java)
-            }
+            is QueryCriteria.LinearStateQueryCriteria ->
+                entityClasses.add(CommonSchemaV1.LinearState::class.java)
 
-            is QueryCriteria.VaultCustomQueryCriteria<*, *> -> {
-                entityClasses.add(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
-            }
+            is QueryCriteria.VaultCustomQueryCriteria<*, *> ->
+                entityClasses.add(CommonSchemaV1.CustomState::class.java)
 
             is QueryCriteria.AndComposition -> {
                 println("AND")

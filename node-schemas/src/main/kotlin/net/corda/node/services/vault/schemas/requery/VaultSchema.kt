@@ -1,4 +1,4 @@
-package net.corda.node.services.vault.schemas
+package net.corda.node.services.vault.schemas.requery
 
 import io.requery.*
 import net.corda.core.node.services.Vault
@@ -191,7 +191,7 @@ object VaultSchema {
 
     @Table(name = "vault_party")
     @Entity(model = "vault")
-    interface VaultParty : Persistable  {
+    interface VaultParty : Persistable {
 
         @get:Key
         @get:Generated

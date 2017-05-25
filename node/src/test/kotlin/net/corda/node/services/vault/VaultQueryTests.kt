@@ -13,22 +13,17 @@ import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.QueryCriteria.*
 import net.corda.core.seconds
 import net.corda.core.serialization.OpaqueBytes
-import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.*
-import net.corda.node.services.contract.schemas.CommercialPaperSchemaV3
-import net.corda.node.services.vault.schemas.VaultLinearStateEntity
-import net.corda.node.services.vault.schemas.VaultSchema
+import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.CashSchemaV1.PersistentCashState
+import net.corda.schemas.CommercialPaperSchemaV2
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
-import net.corda.testing.node.makeTestDataSourceProperties
 import org.assertj.core.api.Assertions.assertThat
 import org.bouncycastle.asn1.x500.X500Name
 import org.jetbrains.exposed.sql.Database
-import org.junit.After
-import org.junit.Before
 import org.junit.Ignore
 import org.junit.Test
 import java.io.Closeable
@@ -583,7 +578,7 @@ abstract class VaultQueryTests {
             // DOCSTART VaultQueryExample9
             val linearStateCriteria = LinearStateQueryCriteria(linearId = txns.states.map { it.state.data.linearId })
             val vaultCriteria = VaultQueryCriteria(status = Vault.StateStatus.ALL)
-            val sorting = Sort(setOf(Sort.SortColumn(VaultSchema.VaultLinearState::uuid.name, Sort.Direction.DESC)))
+            val sorting = Sort(setOf(Sort.SortColumn("uuid", Sort.Direction.DESC)))     // Note: column name (not attribute name)
             val results = vaultQuerySvc.queryBy<LinearState>(linearStateCriteria.and(vaultCriteria), sorting = sorting)
             // DOCEND VaultQueryExample9
             assertThat(results.states).hasSize(4)
@@ -650,7 +645,6 @@ abstract class VaultQueryTests {
 
             services.fillWithSomeTestDeals(listOf("123", "456", "789"))
 
-            val criteria = LinearStateQueryCriteria()
             val results = vaultQuerySvc.queryBy<DealState>()
             assertThat(results.states).hasSize(3)
         }
@@ -855,9 +849,9 @@ abstract class VaultQueryTests {
                     }.toSignedTransaction()
             services.recordTransactions(commercialPaper)
 
-            val ccyIndex = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::currency, Operator.EQUAL, USD.currencyCode)
-            val maturityIndex = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
-            val faceValueIndex = LogicalExpression(CommercialPaperSchemaV3.PersistentCommercialPaperState3::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
+            val ccyIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
+            val maturityIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
+            val faceValueIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
 
             val criteria1 = VaultCustomQueryCriteria(ccyIndex)
             val criteria2 = VaultCustomQueryCriteria(maturityIndex)
@@ -915,10 +909,10 @@ abstract class VaultQueryTests {
 
             val linearIdsExpression =
                     if (externalIds == null)
-                        LogicalExpression(VaultLinearStateEntity::externalId, Operator.IS_NULL, null)
+                        LogicalExpression(CommonSchemaV1.LinearState::externalId, Operator.IS_NULL, null)
                     else
-                        LogicalExpression(VaultLinearStateEntity::externalId, Operator.IN, externalIds)
-            val linearIdCondition = LogicalExpression(VaultLinearStateEntity::uuid, Operator.EQUAL, uuids)
+                        LogicalExpression(CommonSchemaV1.LinearState::externalId, Operator.IN, externalIds)
+            val linearIdCondition = LogicalExpression(CommonSchemaV1.LinearState::uuid, Operator.EQUAL, uuids)
 
             val customIndexCriteria1 = VaultCustomQueryCriteria(linearIdsExpression)
             val customIndexCriteria2 = VaultCustomQueryCriteria(linearIdCondition)
