@@ -58,7 +58,6 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
                         val table1txId = VaultSchema.VaultStates::txId
                         val table1index = VaultSchema.VaultStates::index
 
-
                         if (entityClasses.size > 1) {
                             val attributeTxId = RequeryQueryCriteriaParser.findAttribute(entityClasses[1] as Class<Requery.PersistentState>, Requery.PersistentState::txId)
                             val attributeIndex = RequeryQueryCriteriaParser.findAttribute(entityClasses[1] as Class<Requery.PersistentState>, Requery.PersistentState::index)

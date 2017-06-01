@@ -1,9 +1,6 @@
 package net.corda.node.services.schema
 
-import net.corda.core.contracts.Contract
-import net.corda.core.contracts.StateAndRef
-import net.corda.core.contracts.StateRef
-import net.corda.core.contracts.TransactionState
+import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.SecureHash
 import net.corda.core.identity.AbstractParty
@@ -100,9 +97,9 @@ class HibernateObserverTests {
         val schemaService = object : SchemaService {
             override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = emptyMap()
 
-            override fun selectSchemas(state: QueryableState): Iterable<MappedSchema> = setOf(testSchema)
+            override fun selectSchemas(state: ContractState): Iterable<MappedSchema> = setOf(testSchema)
 
-            override fun generateMappedObject(state: QueryableState, schema: MappedSchema): PersistentState {
+            override fun generateMappedObject(state: ContractState, schema: MappedSchema): PersistentState {
                 val parent = Parent()
                 parent.children.add(Child())
                 parent.children.add(Child())

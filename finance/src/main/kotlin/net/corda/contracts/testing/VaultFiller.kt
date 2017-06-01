@@ -146,10 +146,7 @@ fun calculateRandomlySizedAmounts(howMuch: Amount<Currency>, min: Int, max: Int,
     return amounts
 }
 
-
 fun <T : LinearState> ServiceHub.consume(states: List<StateAndRef<T>>) {
-
-
 
     // Create a txn consuming different contract types
     states.forEach {
@@ -162,22 +159,25 @@ fun <T : LinearState> ServiceHub.consume(states: List<StateAndRef<T>>) {
     }
 }
 
+fun <T : LinearState> ServiceHub.consumeAndProduce(states: List<StateAndRef<T>>) {
+
+    // Create a txn consuming different contract types
+    states.forEach {
+        val consumedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
+            addInputState(it.copy(ref = StateRef(it.ref.txhash, it.ref.index+1)))
+            addOutputState(it.state)
+            signWith(DUMMY_NOTARY_KEY)
+        }.toSignedTransaction()
+
+        recordTransactions(consumedTx)
+    }
+}
+
 fun ServiceHub.consumeDeals(dealStates: List<StateAndRef<DealState>>) = consume(dealStates)
 
-//{
-//
-//    // Create a txn consuming different contract types
-//    dealStates.forEach {
-//        val consumedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-//            addInputState(it)
-//            signWith(DUMMY_NOTARY_KEY)
-//        }.toSignedTransaction()
-//
-//        recordTransactions(consumedTx)
-//    }
-//}
-
 fun ServiceHub.consumeLinearStates(linearStates: List<StateAndRef<LinearState>>) = consume(linearStates)
+fun ServiceHub.evolveLinearStates(linearStates: List<StateAndRef<LinearState>>) = consumeAndProduce(linearStates)
+fun ServiceHub.evolveLinearState(linearState: StateAndRef<LinearState>) = consumeAndProduce(listOf(linearState))
 
 fun ServiceHub.consumeCash(amount: Amount<Currency>, to: PublicKey = CHARLIE_KEY.public) {
 

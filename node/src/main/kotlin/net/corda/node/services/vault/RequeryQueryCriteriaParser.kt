@@ -16,8 +16,7 @@ import net.corda.core.node.services.vault.Logical
 import net.corda.core.node.services.vault.Operator
 import net.corda.core.schemas.StatePersistable
 import net.corda.core.utilities.loggerFor
-import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
-import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
+import net.corda.node.services.contract.schemas.requery.CommercialPaperSchemaV3
 import net.corda.node.services.vault.schemas.requery.VaultSchema
 import net.corda.node.services.vault.schemas.requery.VaultStatesEntity
 import org.bouncycastle.asn1.x500.X500Name
@@ -245,16 +244,16 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
 
         when (criteria) {
             is QueryCriteria.VaultQueryCriteria ->
-                entityClasses.add(VaultSchemaV1.VaultStates::class.java)
+                entityClasses.add(VaultSchema.VaultStates::class.java)
 
             is QueryCriteria.FungibleAssetQueryCriteria ->
-                entityClasses.add(CommonSchemaV1.FungibleState::class.java)
+                entityClasses.add(VaultSchema.VaultFungibleState::class.java)
 
             is QueryCriteria.LinearStateQueryCriteria ->
-                entityClasses.add(CommonSchemaV1.LinearState::class.java)
+                entityClasses.add(VaultSchema.VaultLinearState::class.java)
 
             is QueryCriteria.VaultCustomQueryCriteria<*, *> ->
-                entityClasses.add(CommonSchemaV1.CustomState::class.java)
+                entityClasses.add(CommercialPaperSchemaV3.PersistentCommercialPaperState3::class.java)
 
             is QueryCriteria.AndComposition -> {
                 println("AND")

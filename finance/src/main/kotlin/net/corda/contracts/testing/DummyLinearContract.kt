@@ -11,6 +11,7 @@ import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 import net.corda.schemas.DummyLinearStateSchemaV1
 import net.corda.core.identity.AbstractParty
+import net.corda.schemas.DummyLinearStateSchemaV2
 import java.security.PublicKey
 import java.time.Instant
 import java.time.LocalDateTime
@@ -38,7 +39,7 @@ class DummyLinearContract : Contract {
             return participants.any { it.owningKey.containsAny(ourKeys) }
         }
 
-        override fun supportedSchemas(): Iterable<MappedSchema> = listOf(DummyLinearStateSchemaV1)
+        override fun supportedSchemas(): Iterable<MappedSchema> = listOf(DummyLinearStateSchemaV1, DummyLinearStateSchemaV2)
 
         override fun generateMappedObject(schema: MappedSchema): PersistentState {
             return when (schema) {
@@ -49,6 +50,13 @@ class DummyLinearContract : Contract {
                     linearNumber = linearNumber,
                     linearTimestamp = linearTimestamp,
                     linearBoolean = linearBoolean
+                )
+                is DummyLinearStateSchemaV2 -> DummyLinearStateSchemaV2.PersistentDummyLinearState(
+                        uid = linearId,
+                        linearString = linearString,
+                        linearNumber = linearNumber,
+                        linearTimestamp = linearTimestamp,
+                        linearBoolean = linearBoolean
                 )
                 else -> throw IllegalArgumentException("Unrecognised schema $schema")
             }

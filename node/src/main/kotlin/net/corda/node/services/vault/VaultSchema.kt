@@ -1,14 +1,14 @@
 package net.corda.node.services.vault.schemas.jpa
 
+import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.crypto.toBase58String
 import net.corda.core.node.services.Vault
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
+import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1.LinearState
 import java.time.Instant
 import java.util.*
-import javax.persistence.Column
-import javax.persistence.Entity
-import javax.persistence.Index
-import javax.persistence.Table
+import javax.persistence.*
 
 /**
  * JPA representation of the core Vault Schema
@@ -18,10 +18,10 @@ object VaultSchema
 /**
  * First version of the Vault ORM schema
  */
-object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1, mappedTypes = listOf(VaultStates::class.java)) {
+object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1, mappedTypes = listOf(VaultStates::class.java, VaultLinearStates::class.java)) {
     @Entity
     @Table(name = "vault_states",
-           indexes = arrayOf(Index(name = "state_status_idx", columnList = "state_status")))
+            indexes = arrayOf(Index(name = "state_status_idx", columnList = "state_status")))
     class VaultStates(
 
             /** refers to the notary a state is attached to */
@@ -62,4 +62,46 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             var lockUpdateTime: Instant?
 
     ) : PersistentState()
+
+    @Entity
+    @Table(name = "vault_linear_states",
+            indexes = arrayOf(Index(name = "external_id_index", columnList = "external_id"),
+                              Index(name = "uuid_index", columnList = "uuid")))
+    class VaultLinearStates(
+            /**
+             *  Represents a [LinearState] [UniqueIdentifier]
+             */
+            @Column(name = "external_id")
+            var externalId: String?,
+
+            @Column(name = "uuid", unique = true, nullable = false)
+            var uuid: UUID
+
+    ) : PersistentState() {
+        constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId, uuid = uid.id)
+    }
+
+//    /**
+//     *  Party entity (to be replaced by referencing final Identity Schema)
+//     */
+//    @Entity
+//    @Table(name = "vault_party",
+//            indexes = arrayOf(Index(name = "party_name_idx", columnList = "party_name")))
+//    class Party(
+//            @Id
+//            @GeneratedValue
+//            @Column(name = "id")
+//            var id: Int,
+//
+//            /**
+//             * [Party] attributes
+//             */
+//            @Column(name = "party_name")
+//            var name: String,
+//
+//            @Column(name = "party_key")
+//            var key: String
+//    ) {
+//        constructor(party: net.corda.core.identity.Party) : this(0, party.name.toString(), party.owningKey.toBase58String())
+//    }
 }

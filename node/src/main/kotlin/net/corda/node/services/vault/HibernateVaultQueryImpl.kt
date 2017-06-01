@@ -7,16 +7,16 @@ import net.corda.core.contracts.TransactionState
 import net.corda.core.crypto.SecureHash
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultQueryService
-import net.corda.core.node.services.vault.PageSpecification
-import net.corda.core.node.services.vault.QueryCriteria
-import net.corda.core.node.services.vault.Sort
+import net.corda.core.node.services.vault.*
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.storageKryo
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.lang.Exception
+import javax.persistence.EntityManager
 
 
 class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : SingletonSerializeAsToken(), VaultQueryService {
@@ -25,63 +25,79 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         val log = loggerFor<HibernateVaultQueryImpl>()
     }
 
-    private val session = hibernateConfig.sessionFactoryForSchema(VaultSchemaV1)
+    private val sessionFactory = hibernateConfig.sessionFactoryForSchema(VaultSchemaV1)
+    private val criteriaBuilder = sessionFactory.criteriaBuilder
 
     @Throws(VaultQueryException::class)
     override fun <T : ContractState> _queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.Page<T> {
 
-        val criteriaParser = HibernateQueryCriteriaParser(session.criteriaBuilder, contractTypeMappings)
+        log.info("Vault Query for contract type: $contractType, criteria: $criteria, pagination: $paging, sorting: $sorting")
 
-        // parse criteria
-        criteriaParser.parse(criteria)
-
-        try {
-            val cb = session.criteriaBuilder
-
-            val criteriaQuery = cb.createQuery(VaultSchemaV1.VaultStates::class.java)
-            val vaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
-
-            criteriaQuery.where(cb.equal(vaultStates.get<Vault.StateStatus>("stateStatus"), Vault.StateStatus.UNCONSUMED))
-            criteriaQuery.orderBy()
-
-            val query = session.createEntityManager().createQuery(criteriaQuery)
-
-            // pagination
-            query.firstResult = paging.pageNumber * paging.pageSize
-            query.maxResults = paging.pageSize
-
-            val countQuery = cb.createQuery(Long::class.java)
-            countQuery.select(cb.count(countQuery.from(VaultSchemaV1.VaultStates::class.java)))
-            val totalStates = session.createEntityManager().createQuery(countQuery).singleResult.toInt()
-
-            // sorting
-            sorting.columns.map {
-                when(it.direction) {
-                    Sort.Direction.ASC ->
-                        criteriaQuery.orderBy(cb.asc(vaultStates.get<String>(it.columnName)))
-                    Sort.Direction.DESC ->
-                        criteriaQuery.orderBy(cb.desc(vaultStates.get<String>(it.columnName)))
+        // set defaults: UNCONSUMED, ContractTypes
+        val contractTypes = deriveContractTypes(contractType)
+        val criteria =
+                if (criteria is QueryCriteria.VaultQueryCriteria) {
+                    val combinedContractStateTypes = criteria.contractStateTypes?.plus(contractTypes) ?: contractTypes
+                    criteria.copy(contractStateTypes = combinedContractStateTypes)
+                } else {
+                    criteria.and(QueryCriteria.VaultQueryCriteria(status = Vault.StateStatus.UNCONSUMED, contractStateTypes = contractTypes))
                 }
-            }
 
-            // execution
-            val results = query.resultList
-            val statesAndRefs: MutableList<StateAndRef<*>> = mutableListOf()
-            val statesMeta: MutableList<Vault.StateMetadata> = mutableListOf()
+        val session = sessionFactory.withOptions().
+                connection(TransactionManager.current().connection).
+                openSession()
 
-            results.asSequence()
-                    .forEach { it ->
-                        val stateRef = StateRef(SecureHash.parse(it.stateRef!!.txId!!), it.stateRef!!.index!!)
-                        val state = it.contractState.deserialize<TransactionState<T>>(storageKryo())
-                        statesMeta.add(Vault.StateMetadata(stateRef, it.contractStateClassName, it.recordedTime, it.consumedTime, it.stateStatus, it.notaryName, it.notaryKey, it.lockId, it.lockUpdateTime))
-                        statesAndRefs.add(StateAndRef(state, stateRef))
+        session.use {
+            val criteriaQuery = criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
+            val queryRootVaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
+
+            val contractTypeMappings = resolveUniqueContractStateTypes(session)
+            val criteriaParser = HibernateQueryCriteriaParser(contractTypeMappings, criteriaBuilder, criteriaQuery, queryRootVaultStates)
+
+            try {
+                // parse criteria and build where predicates
+                criteriaParser.parse(criteria)
+
+                // sorting
+                sorting.columns.map {
+                    when (it.direction) {
+                        Sort.Direction.ASC ->
+                            criteriaQuery.orderBy(criteriaBuilder.asc(queryRootVaultStates.get<String>(it.columnName)))
+                        Sort.Direction.DESC ->
+                            criteriaQuery.orderBy(criteriaBuilder.desc(queryRootVaultStates.get<String>(it.columnName)))
                     }
+                }
 
-            return Vault.Page(states = statesAndRefs, statesMetadata = statesMeta, pageable = paging, totalStatesAvailable = totalStates) as Vault.Page<T>
+                // prepare query for execution
+                val query = session.createQuery(criteriaQuery)
 
-        } catch (e: Exception) {
-            log.error(e.message)
-            throw e.cause ?: e
+                // pagination
+                val countQuery = criteriaBuilder.createQuery(Long::class.java)
+                countQuery.select(criteriaBuilder.count(countQuery.from(VaultSchemaV1.VaultStates::class.java)))
+                val totalStates = session.createQuery(countQuery).singleResult.toInt()
+
+                query.firstResult = paging.pageNumber * paging.pageSize
+                query.maxResults = paging.pageSize
+
+                // execution
+                val results = query.resultList
+                val statesAndRefs: MutableList<StateAndRef<*>> = mutableListOf()
+                val statesMeta: MutableList<Vault.StateMetadata> = mutableListOf()
+
+                results.asSequence()
+                        .forEach { it ->
+                            val stateRef = StateRef(SecureHash.parse(it.stateRef!!.txId!!), it.stateRef!!.index!!)
+                            val state = it.contractState.deserialize<TransactionState<T>>(storageKryo())
+                            statesMeta.add(Vault.StateMetadata(stateRef, it.contractStateClassName, it.recordedTime, it.consumedTime, it.stateStatus, it.notaryName, it.notaryKey, it.lockId, it.lockUpdateTime))
+                            statesAndRefs.add(StateAndRef(state, stateRef))
+                        }
+
+                return Vault.Page(states = statesAndRefs, statesMetadata = statesMeta, pageable = paging, totalStatesAvailable = totalStates) as Vault.Page<T>
+
+            } catch (e: Exception) {
+                log.error(e.message)
+                throw e.cause ?: e
+            }
         }
     }
 
@@ -93,25 +109,25 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
      * Maintain a list of contract state interfaces to concrete types stored in the vault
      * for usage in generic queries of type queryBy<LinearState> or queryBy<FungibleState<*>>
      */
-    val contractTypeMappings: MutableMap<String, MutableList<String>> get() {
+    fun resolveUniqueContractStateTypes(session: EntityManager) : MutableMap<String, MutableList<String>> {
 
-        val criteria = session.criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
-        val vaultStates = criteria.from(VaultSchemaV1.VaultStates::class.java)
-        criteria.select(vaultStates.get("contractStateClassName")).distinct(true)
-        val query = session.createEntityManager().createQuery(criteria)
-        val results = query.resultList
-        val distinctTypes = results.map { it.contractStateClassName }
+            val criteria = criteriaBuilder.createQuery(String::class.java)
+            val vaultStates = criteria.from(VaultSchemaV1.VaultStates::class.java)
+            criteria.select(vaultStates.get("contractStateClassName")).distinct(true)
+            val query = session.createQuery(criteria)
+            val results = query.resultList
+            val distinctTypes = results.map { it }
 
-        val contractInterfaceToConcreteTypes = mutableMapOf<String, MutableList<String>>()
-        distinctTypes.forEach { it ->
-            val concreteType = Class.forName(it) as Class<ContractState>
-            val contractInterfaces = deriveContractInterfaces(concreteType)
-            contractInterfaces.map {
-                val contractInterface = contractInterfaceToConcreteTypes.getOrPut( it.name, { mutableListOf() })
-                contractInterface.add(concreteType.name)
+            val contractInterfaceToConcreteTypes = mutableMapOf<String, MutableList<String>>()
+            distinctTypes.forEach { it ->
+                val concreteType = Class.forName(it) as Class<ContractState>
+                val contractInterfaces = deriveContractInterfaces(concreteType)
+                contractInterfaces.map {
+                    val contractInterface = contractInterfaceToConcreteTypes.getOrPut(it.name, { mutableListOf() })
+                    contractInterface.add(concreteType.name)
+                }
             }
-        }
-        return contractInterfaceToConcreteTypes
+            return contractInterfaceToConcreteTypes
     }
 
     private fun <T: ContractState> deriveContractInterfaces(clazz: Class<T>): Set<Class<T>> {

@@ -35,8 +35,38 @@ class HibernateConfiguration(val schemaService: SchemaService) {
         return sessionFactories.computeIfAbsent(schema, { makeSessionFactoryForSchema(it) })
     }
 
+    fun sessionFactoryForSchemas(vararg schemas: MappedSchema): SessionFactory {
+        return makeSessionFactoryForSchemas(schemas.iterator())
+    }
+
     private fun makeSessionFactoryForSchema(schema: MappedSchema): SessionFactory {
-        logger.info("Creating session factory for schema $schema")
+        return makeSessionFactoryForSchemas(setOf(schema).iterator())
+//        logger.info("Creating session factory for schema $schema")
+//        val serviceRegistry = BootstrapServiceRegistryBuilder().build()
+//        val metadataSources = MetadataSources(serviceRegistry)
+//        // We set a connection provider as the auto schema generation requires it.  The auto schema generation will not
+//        // necessarily remain and would likely be replaced by something like Liquibase.  For now it is very convenient though.
+//        // TODO: replace auto schema generation as it isn't intended for production use, according to Hibernate docs.
+//        val config = Configuration(metadataSources).setProperty("hibernate.connection.provider_class", HibernateConfiguration.NodeDatabaseConnectionProvider::class.java.name)
+//                .setProperty("hibernate.hbm2ddl.auto", "update")
+//                .setProperty("hibernate.show_sql", "true")
+//                .setProperty("hibernate.format_sql", "true")
+//        val options = schemaService.schemaOptions[schema]
+//        val databaseSchema = options?.databaseSchema
+//        if (databaseSchema != null) {
+//            logger.debug { "Database schema = $databaseSchema" }
+//            config.setProperty("hibernate.default_schema", databaseSchema)
+//        }
+//        val tablePrefix = options?.tablePrefix ?: "contract_" // We always have this as the default for aesthetic reasons.
+//        logger.debug { "Table prefix = $tablePrefix" }
+//        schema.mappedTypes.forEach { config.addAnnotatedClass(it) }
+//        val sessionFactory = buildSessionFactory(config, metadataSources, tablePrefix)
+//        logger.info("Created session factory for schema $schema")
+//        return sessionFactory
+    }
+
+    private fun makeSessionFactoryForSchemas(schemas: Iterator<MappedSchema>): SessionFactory {
+        logger.info("Creating session factory for schemas: $schemas")
         val serviceRegistry = BootstrapServiceRegistryBuilder().build()
         val metadataSources = MetadataSources(serviceRegistry)
         // We set a connection provider as the auto schema generation requires it.  The auto schema generation will not
@@ -44,19 +74,13 @@ class HibernateConfiguration(val schemaService: SchemaService) {
         // TODO: replace auto schema generation as it isn't intended for production use, according to Hibernate docs.
         val config = Configuration(metadataSources).setProperty("hibernate.connection.provider_class", HibernateConfiguration.NodeDatabaseConnectionProvider::class.java.name)
                 .setProperty("hibernate.hbm2ddl.auto", "update")
-                .setProperty("hibernate.show_sql", "false")
+                .setProperty("hibernate.show_sql", "true")
                 .setProperty("hibernate.format_sql", "true")
-        val options = schemaService.schemaOptions[schema]
-        val databaseSchema = options?.databaseSchema
-        if (databaseSchema != null) {
-            logger.debug { "Database schema = $databaseSchema" }
-            config.setProperty("hibernate.default_schema", databaseSchema)
+        schemas.forEach { schema ->
+            schema.mappedTypes.forEach { config.addAnnotatedClass(it) }
         }
-        val tablePrefix = options?.tablePrefix ?: "contract_" // We always have this as the default for aesthetic reasons.
-        logger.debug { "Table prefix = $tablePrefix" }
-        schema.mappedTypes.forEach { config.addAnnotatedClass(it) }
-        val sessionFactory = buildSessionFactory(config, metadataSources, tablePrefix)
-        logger.info("Created session factory for schema $schema")
+        val sessionFactory = buildSessionFactory(config, metadataSources, "")
+        logger.info("Created session factory for schemas: $schemas")
         return sessionFactory
     }
 

@@ -23,36 +23,42 @@ import net.corda.testing.MEGA_CORP_KEY
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
 import org.assertj.core.api.Assertions
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
 class RequeryVaultQueryTests : VaultQueryTests() {
 
-    @Before
-    fun setUp() {
-        val dataSourceProps = makeTestDataSourceProperties()
-        val dataSourceAndDatabase = configureDatabase(dataSourceProps)
-        dataSource = dataSourceAndDatabase.first
-        database = dataSourceAndDatabase.second
-        database.transaction {
-            services = object : MockServices(MEGA_CORP_KEY) {
-                override val vaultService: VaultService = makeVaultService(dataSourceProps)
-
-                override fun recordTransactions(txs: Iterable<SignedTransaction>) {
-                    for (stx in txs) {
-                        storageService.validatedTransactions.addTransaction(stx)
-                    }
-                    // Refactored to use notifyAll() as we have no other unit test for that method with multiple transactions.
-                    vaultService.notifyAll(txs.map { it.tx })
-                }
-                override val vaultQueryService : VaultQueryService = RequeryVaultQueryServiceImpl(dataSourceProps)
-            }
-        }
-    }
+//    @Before
+//    fun setUp() {
+//        val dataSourceProps = makeTestDataSourceProperties()
+//        val dataSourceAndDatabase = configureDatabase(dataSourceProps)
+//        dataSource = dataSourceAndDatabase.first
+//        database = dataSourceAndDatabase.second
+//        database.transaction {
+//            services = object : MockServices(MEGA_CORP_KEY) {
+//                override val vaultService: VaultService = makeVaultService(dataSourceProps)
+//
+//                override fun recordTransactions(txs: Iterable<SignedTransaction>) {
+//                    for (stx in txs) {
+//                        storageService.validatedTransactions.addTransaction(stx)
+//                    }
+//                    // Refactored to use notifyAll() as we have no other unit test for that method with multiple transactions.
+//                    vaultService.notifyAll(txs.map { it.tx })
+//                }
+//                override val vaultQueryService : VaultQueryService = RequeryVaultQueryServiceImpl(dataSourceProps)
+//            }
+//        }
+//    }
+//
+//    @After
+//    fun tearDown() {
+//        dataSource.close()
+//    }
 
     // specifying Query on Commercial Paper contract state attributes
     @Test
-    fun `commercial paper custom query using Requery annotations`() {
+    fun `custom query using Requery annotations - commercial paper`() {
         database.transaction {
 
             // MegaCorp™ issues $10,000 of commercial paper, to mature in 30 days, owned by itself.
