@@ -26,7 +26,7 @@ object CommonSchemaV1 : MappedSchema(schemaFamily = CommonSchema.javaClass, vers
             @Column(name = "external_id")
             var externalId: String?,
 
-            @Column(name = "uuid", unique = true, nullable = false)
+            @Column(name = "uuid", nullable = false)
             var uuid: UUID
 
     ) : PersistentState() {
@@ -49,6 +49,9 @@ object CommonSchemaV1 : MappedSchema(schemaFamily = CommonSchema.javaClass, vers
              *  Note: the underlying Product being issued must be modelled into the
              *  custom contract itself (eg. see currency in Cash contract state)
              */
+
+//            @OneToMany
+//            var exitKeys: Set<Party>,
 
             /** Amount attributes */
 

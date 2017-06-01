@@ -1,6 +1,7 @@
 package net.corda.node.services.schema
 
 import net.corda.core.contracts.ContractState
+import net.corda.core.contracts.FungibleAsset
 import net.corda.core.contracts.LinearState
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
@@ -27,9 +28,9 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
     // Whitelisted tables are those required by internal Corda services
     // For example, cash is used by the vault for coin selection
     // This whitelist will grow as we add further functionality (eg. other fungible assets)
-    override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = mapOf( /*Pair(CashSchemaV1, SchemaService.SchemaOptions()),*/
+    override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = mapOf(Pair(CashSchemaV1, SchemaService.SchemaOptions()),
                                                                                        Pair(CommonSchemaV1, SchemaService.SchemaOptions()),
-                                                                                       Pair(CashSchemaV3, SchemaService.SchemaOptions()),
+                                                                                       /*Pair(CashSchemaV3, SchemaService.SchemaOptions()),*/
                                                                                        Pair(VaultSchemaV1, SchemaService.SchemaOptions(tablePrefix = "")))
 
     // Currently returns all schemas supported by the state, with no filtering or enrichment.
@@ -39,6 +40,9 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
             schemas += state.supportedSchemas()
         if (state is LinearState)
             schemas += VaultSchemaV1   // VaultLinearStates
+        if (state is FungibleAsset<*>)
+            schemas += VaultSchemaV1   // VaultFungibleStates
+
         return schemas
     }
 
@@ -46,6 +50,8 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
     override fun generateMappedObject(state: ContractState, schema: MappedSchema): PersistentState {
         if ((schema is VaultSchemaV1) && (state is LinearState))
             return VaultSchemaV1.VaultLinearStates(state.linearId)
+        if ((schema is VaultSchemaV1) && (state is FungibleAsset<*>))
+            return VaultSchemaV1.VaultFungibleStates(state.amount.quantity)
         return (state as QueryableState).generateMappedObject(schema)
     }
 }

@@ -14,6 +14,7 @@ import net.corda.core.serialization.storageKryo
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
+import net.corda.schemas.CashSchemaV1
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.lang.Exception
 import javax.persistence.EntityManager
@@ -25,7 +26,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         val log = loggerFor<HibernateVaultQueryImpl>()
     }
 
-    private val sessionFactory = hibernateConfig.sessionFactoryForSchema(VaultSchemaV1)
+    private val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CashSchemaV1)
     private val criteriaBuilder = sessionFactory.criteriaBuilder
 
     @Throws(VaultQueryException::class)
@@ -33,15 +34,8 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
 
         log.info("Vault Query for contract type: $contractType, criteria: $criteria, pagination: $paging, sorting: $sorting")
 
-        // set defaults: UNCONSUMED, ContractTypes
-        val contractTypes = deriveContractTypes(contractType)
-        val criteria =
-                if (criteria is QueryCriteria.VaultQueryCriteria) {
-                    val combinedContractStateTypes = criteria.contractStateTypes?.plus(contractTypes) ?: contractTypes
-                    criteria.copy(contractStateTypes = combinedContractStateTypes)
-                } else {
-                    criteria.and(QueryCriteria.VaultQueryCriteria(status = Vault.StateStatus.UNCONSUMED, contractStateTypes = contractTypes))
-                }
+        // enrich criteria with requested type
+        val typedCriteria = setCriteriaDefaults(criteria, contractType)
 
         val session = sessionFactory.withOptions().
                 connection(TransactionManager.current().connection).
@@ -56,25 +50,26 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
 
             try {
                 // parse criteria and build where predicates
-                criteriaParser.parse(criteria)
+                criteriaParser.parse(typedCriteria)
 
                 // sorting
-                sorting.columns.map {
-                    when (it.direction) {
-                        Sort.Direction.ASC ->
-                            criteriaQuery.orderBy(criteriaBuilder.asc(queryRootVaultStates.get<String>(it.columnName)))
-                        Sort.Direction.DESC ->
-                            criteriaQuery.orderBy(criteriaBuilder.desc(queryRootVaultStates.get<String>(it.columnName)))
-                    }
-                }
+                if (sorting.columns.isNotEmpty())
+                    criteriaParser.parse(sorting)
 
                 // prepare query for execution
                 val query = session.createQuery(criteriaQuery)
 
                 // pagination
+                if (paging.pageNumber < 0) throw VaultQueryException("Page specification: invalid page number ${paging.pageNumber} [page numbers start from 0]")
+                if (paging.pageSize < 0 || paging.pageSize > MAX_PAGE_SIZE) throw VaultQueryException("Page specification: invalid page size ${paging.pageSize} [maximum page size is ${MAX_PAGE_SIZE}]")
+
+                // count total results available
                 val countQuery = criteriaBuilder.createQuery(Long::class.java)
                 countQuery.select(criteriaBuilder.count(countQuery.from(VaultSchemaV1.VaultStates::class.java)))
                 val totalStates = session.createQuery(countQuery).singleResult.toInt()
+
+                if (paging.pageSize * paging.pageNumber >= totalStates)
+                    throw VaultQueryException("Requested more results than available [${paging.pageSize} * ${paging.pageNumber} > ${totalStates}]")
 
                 query.firstResult = paging.pageNumber * paging.pageSize
                 query.maxResults = paging.pageSize
@@ -99,6 +94,29 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
                 throw e.cause ?: e
             }
         }
+    }
+
+    private fun setCriteriaDefaults(criteria: QueryCriteria, contractType: Class<out ContractState>): QueryCriteria {
+        val contractTypes = deriveContractTypes(contractType)
+
+        if (criteria is QueryCriteria.AndComposition) {
+            return setCriteriaDefaults(criteria.a, contractType)
+            return setCriteriaDefaults(criteria.b, contractType)
+        }
+
+        if (criteria is QueryCriteria.OrComposition) {
+            return setCriteriaDefaults(criteria.a, contractType)
+            return setCriteriaDefaults(criteria.b, contractType)
+        }
+
+        val criteria =
+                if (criteria is QueryCriteria.VaultQueryCriteria) {
+                    val combinedContractStateTypes = criteria.contractStateTypes?.plus(contractTypes) ?: contractTypes
+                    criteria.copy(contractStateTypes = combinedContractStateTypes)
+                } else {
+                    criteria.and(QueryCriteria.VaultQueryCriteria(contractStateTypes = contractTypes))
+                }
+        return criteria
     }
 
     override fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.PageAndUpdates<T> {

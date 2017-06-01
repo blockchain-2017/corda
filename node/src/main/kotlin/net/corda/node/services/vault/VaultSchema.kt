@@ -18,7 +18,7 @@ object VaultSchema
 /**
  * First version of the Vault ORM schema
  */
-object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1, mappedTypes = listOf(VaultStates::class.java, VaultLinearStates::class.java)) {
+object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1, mappedTypes = listOf(VaultStates::class.java, VaultLinearStates::class.java, VaultFungibleStates::class.java)) {
     @Entity
     @Table(name = "vault_states",
             indexes = arrayOf(Index(name = "state_status_idx", columnList = "state_status")))
@@ -74,11 +74,52 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             @Column(name = "external_id")
             var externalId: String?,
 
-            @Column(name = "uuid", unique = true, nullable = false)
+            @Column(name = "uuid", nullable = false)
             var uuid: UUID
 
     ) : PersistentState() {
         constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId, uuid = uid.id)
+    }
+
+    @Entity
+    @Table(name = "vault_fungible_states")
+    class VaultFungibleStates(
+
+            /** [ContractState] attributes */
+            //            @OneToMany
+//            var participants: Set<Party>,
+
+            /** [OwnableState] attributes */
+            @Column(name = "owner_key")
+            var ownerKey: String,
+
+            /** [FungibleAsset] attributes
+             *
+             *  Note: the underlying Product being issued must be modelled into the
+             *  custom contract itself (eg. see currency in Cash contract state)
+             */
+
+            //            @OneToMany
+//            var exitKeys: Set<Party>,
+
+            /** Amount attributes */
+
+            @Column(name = "quantity")
+            var quantity: Long,
+
+            /** Issuer attributes */
+            //            @OneToOne
+//            @JoinColumn(name = "party_id")
+//            var issuerParty: Party,
+
+            @Column(name = "issuer_party_name")
+            var issuerPartyName: String,
+
+            @Column(name = "issuer_reference")
+            var issuerRef: ByteArray
+
+    ) : PersistentState() {
+        constructor(_quantity: Long) : this("", _quantity, "", ByteArray(0))
     }
 
 //    /**

@@ -159,17 +159,31 @@ fun <T : LinearState> ServiceHub.consume(states: List<StateAndRef<T>>) {
     }
 }
 
-fun <T : LinearState> ServiceHub.consumeAndProduce(states: List<StateAndRef<T>>) {
+fun <T : LinearState> ServiceHub.consumeAndProduce(stateAndRef: StateAndRef<T>): StateAndRef<T> {
 
     // Create a txn consuming different contract types
-    states.forEach {
-        val consumedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-            addInputState(it.copy(ref = StateRef(it.ref.txhash, it.ref.index+1)))
-            addOutputState(it.state)
-            signWith(DUMMY_NOTARY_KEY)
-        }.toSignedTransaction()
+    val consumedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
+        addInputState(stateAndRef)
+        signWith(DUMMY_NOTARY_KEY)
+    }.toSignedTransaction()
 
-        recordTransactions(consumedTx)
+    recordTransactions(consumedTx)
+
+    // Create a txn consuming different contract types
+    val producedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
+        addOutputState(DummyLinearContract.State(linearId = stateAndRef.state.data.linearId))
+        signWith(DUMMY_NOTARY_KEY)
+    }.toSignedTransaction()
+
+    recordTransactions(producedTx)
+
+    return producedTx.tx.outRef<T>(0)
+}
+
+fun <T : LinearState> ServiceHub.consumeAndProduce(states: List<StateAndRef<T>>) {
+
+    states.forEach {
+        consumeAndProduce(it)
     }
 }
 
@@ -177,7 +191,7 @@ fun ServiceHub.consumeDeals(dealStates: List<StateAndRef<DealState>>) = consume(
 
 fun ServiceHub.consumeLinearStates(linearStates: List<StateAndRef<LinearState>>) = consume(linearStates)
 fun ServiceHub.evolveLinearStates(linearStates: List<StateAndRef<LinearState>>) = consumeAndProduce(linearStates)
-fun ServiceHub.evolveLinearState(linearState: StateAndRef<LinearState>) = consumeAndProduce(listOf(linearState))
+fun ServiceHub.evolveLinearState(linearState: StateAndRef<LinearState>) : StateAndRef<LinearState> = consumeAndProduce(linearState)
 
 fun ServiceHub.consumeCash(amount: Amount<Currency>, to: PublicKey = CHARLIE_KEY.public) {
 

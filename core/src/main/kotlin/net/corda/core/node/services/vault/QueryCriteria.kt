@@ -61,13 +61,12 @@ sealed class QueryCriteria {
     *   [Commodity] as used in [CommodityContract] state
     */
     data class FungibleAssetQueryCriteria @JvmOverloads constructor(
-            val ownerIdentity: List<X500Name>? = null,
-            val quantity: Logical<*,Long>? = null,
-            val tokenType: List<Class<out Any>>? = null,
-            val tokenValue: List<String>? = null,
-            val issuerPartyName: List<X500Name>? = null,
-            val issuerRef: List<OpaqueBytes>? = null,
-            val exitKeyIdentity: List<X500Name>? = null) : QueryCriteria() {
+           val participants: List<X500Name>? = null,
+           val owner: List<X500Name>? = null,
+           val quantity: Logical<*,Long>? = null,
+           val issuerPartyName: List<X500Name>? = null,
+           val issuerRef: List<OpaqueBytes>? = null,
+           val exitKeys: List<X500Name>? = null) : QueryCriteria() {
 
        override fun visit(parser: IQueryCriteriaParser) {
            parser.parseCriteria(this)
@@ -85,7 +84,7 @@ sealed class QueryCriteria {
      *
      * Refer to [CommercialPaper.State] for a concrete example.
      */
-    data class VaultCustomQueryCriteria<L: Any, R>(val indexExpression: Logical<KMutableProperty1<L,R>, out R>) : QueryCriteria() {
+    data class VaultCustomQueryCriteria<L: Any, R : Comparable<R>>(val indexExpression: Logical<KMutableProperty1<L,R>, out R>) : QueryCriteria() {
 
         override fun visit(parser: IQueryCriteriaParser) {
             parser.parseCriteria(this)
@@ -120,10 +119,11 @@ sealed class QueryCriteria {
 interface IQueryCriteriaParser {
     fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria)
     fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria)
-    fun <L: Any,R> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>)
+    fun <L: Any,R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>)
     fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria)
 
     fun parse(criteria: QueryCriteria)
+    fun parse(sorting: Sort)
 }
 
 infix fun QueryCriteria.and(criteria: QueryCriteria): QueryCriteria = AndComposition(this, criteria)

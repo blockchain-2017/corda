@@ -229,16 +229,8 @@ class RequeryQueryCriteriaParserTest {
             val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
 
             val owners = listOf(MINI_CORP.name)
-            val criteria1 = QueryCriteria.FungibleAssetQueryCriteria(ownerIdentity = owners)
+            val criteria1 = QueryCriteria.FungibleAssetQueryCriteria(owner = owners)
             criteriaParse.parse(criteria1)
-
-            val tokenTypes = listOf(Currency::class.java)
-            val criteria2 = QueryCriteria.FungibleAssetQueryCriteria(tokenType = tokenTypes)
-            criteriaParse.parse(criteria2)
-
-            val tokenValues = listOf(GBP.currencyCode, USD.currencyCode)
-            val criteria3 = QueryCriteria.FungibleAssetQueryCriteria(tokenValue = tokenValues)
-            criteriaParse.parse(criteria3)
 
             val quantityExpression = LogicalExpression(this, Operator.GREATER_THAN, 50L)
             val criteria4 = QueryCriteria.FungibleAssetQueryCriteria(quantity = quantityExpression)
@@ -253,11 +245,8 @@ class RequeryQueryCriteriaParserTest {
             criteriaParse.parse(criteria6)
 
             val exitKeyIds = listOf(getTestX509Name("TEST"))
-            val criteria7 = QueryCriteria.FungibleAssetQueryCriteria(exitKeyIdentity = exitKeyIds)
+            val criteria7 = QueryCriteria.FungibleAssetQueryCriteria(exitKeys = exitKeyIds)
             criteriaParse.parse(criteria7)
-
-            val criteriaAnd = criteria2.and(criteria3)
-            criteriaParse.parse(criteriaAnd)
 
             val criteriaOr = criteria1.or(criteria4)
             criteriaParse.parse(criteriaOr)

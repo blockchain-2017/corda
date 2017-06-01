@@ -172,13 +172,11 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
     }
 
     override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) {
-        criteria.tokenType
-        criteria.tokenValue
         criteria.quantity
         criteria.issuerPartyName
         criteria.issuerRef
-        criteria.ownerIdentity
-        criteria.exitKeyIdentity
+        criteria.owner
+        criteria.exitKeys
 
         // parse quantity
         val attribute = findAttribute(VaultSchema.VaultFungibleState::quantity).get()
@@ -190,7 +188,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         }
     }
 
-    override fun <L: Any, R> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>) {
+    override fun <L: Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>) {
 
         val logicalExpr = criteria.indexExpression
         val property = logicalExpr?.leftOperand!!
@@ -223,9 +221,17 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         query.where(logicalCondition)
     }
 
-    fun parseSorting(sortColumn: Sort.SortColumn): OrderingExpression<*> {
+    override fun parse(sorting: Sort) {
+        val orderByExpressions: MutableList<OrderingExpression<*>> = mutableListOf()
+        sorting.columns.map {
+            orderByExpressions.add(parseSorting(it))
+        }
+        query.orderBy(*orderByExpressions.toTypedArray())
+    }
 
-        val attribute = AttributeBuilder<VaultSchema.VaultStates, String>(sortColumn.columnName, sortColumn.columnName.javaClass)
+    private fun parseSorting(sortColumn: Sort.SortColumn): OrderingExpression<*> {
+
+        val attribute = AttributeBuilder<VaultSchema.VaultStates, String>(sortColumn.entityStateColumnName, sortColumn.entityStateColumnName.javaClass)
 
         val orderingExpression =
                 when (sortColumn.direction) {

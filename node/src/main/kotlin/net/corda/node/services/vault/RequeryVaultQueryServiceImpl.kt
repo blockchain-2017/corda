@@ -76,11 +76,7 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
 //                            query.limit((paging.pageNumber + 1) * paging.pageSize)  // cannot specify limit explicitly if using an offset
 
                         // Sorting
-                        val orderByExpressions: MutableList<OrderingExpression<*>> = mutableListOf()
-                        sorting.columns.map {
-                            orderByExpressions.add(criteriaParser.parseSorting(it))
-                        }
-                        query.orderBy(*orderByExpressions.toTypedArray())
+                        criteriaParser.parse(sorting)
 
                         // Execute
                         val totalStates = query.get().count()   // to enable further pagination
