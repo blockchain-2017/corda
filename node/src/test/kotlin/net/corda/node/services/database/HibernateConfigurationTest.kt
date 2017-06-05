@@ -1,6 +1,7 @@
 package net.corda.node.services.database
 
 import net.corda.contracts.asset.Cash
+import net.corda.contracts.asset.DUMMY_CASH_ISSUER
 import net.corda.contracts.testing.consumeCash
 import net.corda.contracts.testing.fillWithSomeTestCash
 import net.corda.contracts.testing.fillWithSomeTestDeals
@@ -9,10 +10,15 @@ import net.corda.core.contracts.DOLLARS
 import net.corda.core.contracts.POUNDS
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.StateRef
+import net.corda.core.crypto.toBase58String
+import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultService
+import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.schemas.PersistentStateRef
 import net.corda.core.transactions.SignedTransaction
+import net.corda.core.utilities.ALICE
+import net.corda.core.utilities.BOB
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.node.services.schema.NodeSchemaService
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
@@ -20,6 +26,8 @@ import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.*
+import net.corda.testing.ALICE_PUBKEY
+import net.corda.testing.BOB_PUBKEY
 import net.corda.testing.MEGA_CORP_KEY
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
@@ -457,6 +465,46 @@ class HibernateConfigurationTest {
         queryResults.forEach { println("${it.stateRef} with owner name: ${it.owner.name} and owner key: ${it.owner.key}")}
 
         assertThat(queryResults).hasSize(10)
+    }
+
+    /**
+     *  Test Query by Party (OneToOne table mapping)
+     */
+    @Test
+    fun `query fungible states by owner party`() {
+
+        database.transaction {
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L), ownedBy = (BOB_PUBKEY))
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L), ownedBy = (ALICE_PUBKEY))
+        }
+
+        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CommonSchemaV1, CashSchemaV3)
+        val criteriaBuilder = sessionFactory.criteriaBuilder
+        val entityManager = sessionFactory.createEntityManager()
+
+        // structure query
+        val criteriaQuery = criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
+
+        // select
+        val vaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
+        criteriaQuery.select(vaultStates)
+
+        // search predicate
+        val cashStates = criteriaQuery.from(CashSchemaV3.PersistentCashState::class.java)
+        val joinCashToParty = cashStates.join<CashSchemaV3.PersistentCashState,CommonSchemaV1.Party>("owner")
+        criteriaQuery.where(criteriaBuilder.equal(joinCashToParty.get<CommonSchemaV1.Party>("key"), BOB_PUBKEY.toBase58String()))
+
+//        val aliceParty = CommonSchemaV1.Party(AnonymousParty(ALICE_PUBKEY))
+//        val bobParty = CommonSchemaV1.Party(AnonymousParty(BOB_PUBKEY))
+//        val predicate = criteriaBuilder.and(criteriaBuilder.equal(cashStates.get<CommonSchemaV1.Party>("owner"), setOf(aliceParty, bobParty)))
+//        criteriaQuery.where(predicate)
+
+        // execute query
+        val queryResults = entityManager.createQuery(criteriaQuery).resultList
+
+        queryResults.forEach { println("${it.stateRef} with owner name") } //: ${it.contractState ...name} and owner key: ${it.owner.key}")}
+
+        assertThat(queryResults).hasSize(4)
     }
 
     /**

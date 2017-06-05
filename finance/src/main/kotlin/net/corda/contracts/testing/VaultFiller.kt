@@ -18,6 +18,7 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.CHARLIE_KEY
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
+import sun.security.x509.X500Name
 import java.security.KeyPair
 import java.security.PublicKey
 import java.util.*

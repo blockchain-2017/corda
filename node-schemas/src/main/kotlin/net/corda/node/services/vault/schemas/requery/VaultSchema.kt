@@ -139,7 +139,7 @@ object VaultSchema {
         var parties: Set<VaultParty>
 
 //        @get:OneToMany(mappedBy = "deal_state_parties")
-        var partyNames: Set<String>
+//        var partyNames: Set<String>
     }
 
     @Table(name = "vault_fungible_states")

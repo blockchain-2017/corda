@@ -206,8 +206,8 @@ class RequeryQueryCriteriaParserTest {
             val criteria2 = QueryCriteria.LinearStateQueryCriteria(dealRef = dealRefs)
             criteriaParse.parse(criteria2)
 
-            val dealParties = listOf(MEGA_CORP.name, MINI_CORP.name)
-            val criteria3 = QueryCriteria.LinearStateQueryCriteria(dealPartyName = dealParties)
+            val dealParties = listOf(MEGA_CORP.toAnonymous(), MINI_CORP.toAnonymous())
+            val criteria3 = QueryCriteria.LinearStateQueryCriteria(dealParties = dealParties)
             criteriaParse.parse(criteria3)
 
             val criteriaAnd = criteria1.and(criteria2)

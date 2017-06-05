@@ -6,6 +6,7 @@ import net.corda.contracts.DealState;
 import net.corda.contracts.asset.Cash;
 import net.corda.core.contracts.*;
 import net.corda.core.crypto.SecureHash;
+import net.corda.core.identity.*;
 import net.corda.core.node.services.Vault;
 import net.corda.core.node.services.VaultService;
 import net.corda.core.node.services.vault.PageSpecification;
@@ -155,8 +156,8 @@ public class VaultQueryJavaTests {
             QueryCriteria vaultCriteria = new VaultQueryCriteria(status, null, contractStateTypes);
 
             List<UniqueIdentifier> linearIds = Arrays.asList(uid);
-            List<X500Name> dealPartyNames = Arrays.asList(getMEGA_CORP().getName());
-            QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(linearIds, dealIds, dealPartyNames);
+            List<AnonymousParty> dealParties = Arrays.asList(getMEGA_CORP().toAnonymous());
+            QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(linearIds, dealIds, dealParties);
 
             QueryCriteria compositeCriteria = and(dealCriteriaAll, vaultCriteria);
 
@@ -265,8 +266,8 @@ public class VaultQueryJavaTests {
             QueryCriteria vaultCriteria = new VaultQueryCriteria(Vault.StateStatus.UNCONSUMED, null, contractStateTypes);
 
             List<UniqueIdentifier> linearIds = Arrays.asList(uid);
-            List<X500Name> dealPartyNames = Arrays.asList(getMEGA_CORP().getName());
-            QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(linearIds, dealIds, dealPartyNames);
+            List<AnonymousParty> dealParty = Arrays.asList(getMEGA_CORP().toAnonymous());
+            QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(linearIds, dealIds, dealParty);
 
             QueryCriteria compositeCriteria = and(dealCriteriaAll, vaultCriteria);
 

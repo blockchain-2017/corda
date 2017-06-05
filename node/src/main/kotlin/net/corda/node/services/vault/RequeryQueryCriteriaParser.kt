@@ -8,7 +8,6 @@ import io.requery.meta.AttributeDelegate
 import io.requery.meta.Type
 import io.requery.query.*
 import net.corda.core.contracts.ContractState
-import net.corda.core.crypto.commonName
 import net.corda.core.flows.FlowException
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.*
@@ -158,12 +157,12 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
             })
 
         // deal parties
-        logicalCondition?.and(
-                criteria.dealPartyName?.let {
-                    val attribute = findAttribute(VaultSchema.VaultDealState::partyNames).get()
-                    val parties = it.map { it.commonName }.toSet()
-                    attribute.eq(parties)
-                })
+//        logicalCondition?.and(
+//                criteria.dealParties?.let {
+//                    val attribute = findAttribute(VaultSchema.VaultDealState::parties).get()
+//                    val parties = it.map { it }.toSet()
+//                    attribute.eq(parties)
+//                })
 
         if (logicalCondition == null)
             throw InvalidQueryCriteriaException(QueryCriteria.LinearStateQueryCriteria::class.java)

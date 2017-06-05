@@ -1,11 +1,13 @@
 package net.corda.node.services.vault
 
 import net.corda.core.contracts.ContractState
+import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.*
 import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.PersistentStateRef
+import net.corda.core.serialization.toHexString
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import org.bouncycastle.asn1.x500.X500Name
 import java.time.Instant
@@ -19,6 +21,7 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
                                    val criteriaBuilder: CriteriaBuilder,
                                    val criteriaQuery: CriteriaQuery<VaultSchemaV1.VaultStates>,
                                    val vaultStates: Root<VaultSchemaV1.VaultStates>,
+                                   val contractType: Class<out ContractState>,
                                    private var predicates : MutableList<Predicate> = mutableListOf(),
                                    private var fromEntities: MutableMap<Class<out PersistentState>, Root<*>> = mutableMapOf()) : IQueryCriteriaParser {
 
@@ -31,7 +34,8 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             predicates.add(criteriaBuilder.equal(vaultStates.get<Vault.StateStatus>("stateStatus"), criteria.status))
 
         // contract State Types
-        criteria.contractStateTypes?.filter { it.name != ContractState::class.java.name }?.let {
+        val combinedContractTypeTypes = criteria.contractStateTypes?.plus(contractType) ?: setOf(contractType)
+        combinedContractTypeTypes?.filter { it.name != ContractState::class.java.name }?.let {
             val interfaces = it.flatMap { contractTypeMappings[it.name] ?: emptyList() }
             val concrete = it.filter { !it.isInterface }.map { it.name }
             val all = interfaces.plus(concrete)
@@ -51,9 +55,9 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
 
         // state references
         criteria.stateRefs?.let {
-            val stateRefArgs = stateRefArgs(criteria.stateRefs!!)
+            val persistentStateRefs = (criteria.stateRefs as List<StateRef>).map { PersistentStateRef(it.txhash.bytes.toHexString(), it.index) }
             val compositeKey = vaultStates.get<PersistentStateRef>("stateRef")
-            predicates.add(criteriaBuilder.and(compositeKey.`in`(stateRefArgs)))
+            predicates.add(criteriaBuilder.and(compositeKey.`in`(persistentStateRefs)))
         }
 
         // time constraints (recorded, consumed)
@@ -127,6 +131,13 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             }
             predicates.add(criteriaBuilder.and(vaultLinearStates.get<UUID>("uuid").`in`(uniqueIdentifiers.map { it.id })))
         }
+
+        // deal refs
+        criteria.dealRef?.let {
+            val dealRefs = criteria.dealRef as List<String>
+            predicates.add(criteriaBuilder.and(vaultLinearStates.get<String>("dealReference").`in`(dealRefs)))
+        }
+
     }
 
     override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>) {

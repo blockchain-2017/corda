@@ -35,7 +35,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         log.info("Vault Query for contract type: $contractType, criteria: $criteria, pagination: $paging, sorting: $sorting")
 
         // enrich criteria with requested type
-        val typedCriteria = setCriteriaDefaults(criteria, contractType)
+//        val typedCriteria = setCriteriaDefaults(criteria, contractType)
 
         val session = sessionFactory.withOptions().
                 connection(TransactionManager.current().connection).
@@ -46,11 +46,11 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
             val queryRootVaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
 
             val contractTypeMappings = resolveUniqueContractStateTypes(session)
-            val criteriaParser = HibernateQueryCriteriaParser(contractTypeMappings, criteriaBuilder, criteriaQuery, queryRootVaultStates)
+            val criteriaParser = HibernateQueryCriteriaParser(contractTypeMappings, criteriaBuilder, criteriaQuery, queryRootVaultStates, contractType)
 
             try {
                 // parse criteria and build where predicates
-                criteriaParser.parse(typedCriteria)
+                criteriaParser.parse(criteria)
 
                 // sorting
                 if (sorting.columns.isNotEmpty())
@@ -100,13 +100,13 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         val contractTypes = deriveContractTypes(contractType)
 
         if (criteria is QueryCriteria.AndComposition) {
-            return setCriteriaDefaults(criteria.a, contractType)
-            return setCriteriaDefaults(criteria.b, contractType)
+            setCriteriaDefaults(criteria.a, contractType)
+            setCriteriaDefaults(criteria.b, contractType)
         }
 
         if (criteria is QueryCriteria.OrComposition) {
-            return setCriteriaDefaults(criteria.a, contractType)
-            return setCriteriaDefaults(criteria.b, contractType)
+            setCriteriaDefaults(criteria.a, contractType)
+            setCriteriaDefaults(criteria.b, contractType)
         }
 
         val criteria =

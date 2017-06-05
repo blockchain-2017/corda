@@ -1,14 +1,16 @@
 package net.corda.node.services.vault.schemas.jpa
 
 import net.corda.core.contracts.UniqueIdentifier
-import net.corda.core.crypto.toBase58String
 import net.corda.core.node.services.Vault
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1.LinearState
 import java.time.Instant
 import java.util.*
-import javax.persistence.*
+import javax.persistence.Column
+import javax.persistence.Entity
+import javax.persistence.Index
+import javax.persistence.Table
 
 /**
  * JPA representation of the core Vault Schema
@@ -66,19 +68,31 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
     @Entity
     @Table(name = "vault_linear_states",
             indexes = arrayOf(Index(name = "external_id_index", columnList = "external_id"),
-                              Index(name = "uuid_index", columnList = "uuid")))
+                              Index(name = "uuid_index", columnList = "uuid"),
+                                Index(name = "deal_reference_idx", columnList = "deal_reference")))
     class VaultLinearStates(
             /**
              *  Represents a [LinearState] [UniqueIdentifier]
              */
             @Column(name = "external_id")
-            var externalId: String?,
+            var externalId: String?,     // Generics prevent using a Nullable type
+//            var externalId: String,
 
             @Column(name = "uuid", nullable = false)
-            var uuid: UUID
+            var uuid: UUID,
+
+            // TODO: DealState to be deprecated (collapsed into LinearState)
+
+            /** Deal State attributes **/
+            @Column(name = "deal_reference")
+            var dealReference: String
+
+//            @get:OneToMany(mappedBy = "deal_state_parties")
+//            var dealParties: Set<Party>
 
     ) : PersistentState() {
-        constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId, uuid = uid.id)
+        constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId ?: "", uuid = uid.id, dealReference = "")
+        constructor(uid: UniqueIdentifier, _dealReference: String) : this(externalId = uid.externalId ?: "", uuid = uid.id, dealReference = _dealReference)
     }
 
     @Entity
@@ -128,7 +142,7 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
 //    @Entity
 //    @Table(name = "vault_party",
 //            indexes = arrayOf(Index(name = "party_name_idx", columnList = "party_name")))
-//    class Party(
+//    class VaultParty(
 //            @Id
 //            @GeneratedValue
 //            @Column(name = "id")

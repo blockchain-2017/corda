@@ -14,7 +14,6 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.ALICE
 import net.corda.core.utilities.BOB
 import net.corda.core.utilities.DUMMY_NOTARY
-import net.corda.core.utilities.TEST_TX_TIME
 import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.schema.NodeSchemaService
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
@@ -36,6 +35,7 @@ import java.io.Closeable
 import java.lang.Thread.sleep
 import java.math.BigInteger
 import java.security.KeyPair
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
@@ -603,8 +603,8 @@ open class VaultQueryTests {
             val results = vaultQuerySvc.queryBy<LinearState>(criteria)
             // DOCEND VaultQueryExample8
             assertThat(results.states).hasSize(2)
-            assertThat(results.states[0].state.data.linearId).isEqualTo(linearIds.first())
-            assertThat(results.states[1].state.data.linearId).isEqualTo(linearIds.last())
+            assertThat(results.states[0].state.data.linearId).isEqualTo(linearIds.last())
+            assertThat(results.states[1].state.data.linearId).isEqualTo(linearIds.first())
         }
     }
 
@@ -622,8 +622,8 @@ open class VaultQueryTests {
             val results = vaultQuerySvc.queryBy<LinearState>(criteria)
             // DOCEND VaultQueryExample8
             assertThat(results.states).hasSize(2)
-            assertThat(results.states[0].state.data.linearId.externalId).isEqualTo("ID3")
-            assertThat(results.states[1].state.data.linearId.externalId).isEqualTo("ID1")
+            assertThat(results.states[0].state.data.linearId.externalId).isEqualTo("ID1")
+            assertThat(results.states[1].state.data.linearId.externalId).isEqualTo("ID3")
         }
     }
 
@@ -788,9 +788,12 @@ open class VaultQueryTests {
     fun `latest unconsumed deals for ref`() {
         database.transaction {
 
-            services.fillWithSomeTestLinearStates(2, "TEST")
+//            services.fillWithSomeTestLinearStates(2, "TEST")
             services.fillWithSomeTestDeals(listOf("456"))
-            services.fillWithSomeTestDeals(listOf("123", "789"))
+//            services.fillWithSomeTestDeals(listOf("123", "789"))
+
+            val all = vaultQuerySvc.queryBy<DealState>()
+            all.states.forEach { println(it.state) }
 
             val criteria = LinearStateQueryCriteria(dealRef = listOf("456"))
             val results = vaultQuerySvc.queryBy<DealState>(criteria)
@@ -802,12 +805,14 @@ open class VaultQueryTests {
     fun `latest unconsumed deals with party`() {
         database.transaction {
 
+            val parties = listOf(MEGA_CORP.toAnonymous(), MINI_CORP.toAnonymous())
+
             services.fillWithSomeTestLinearStates(2, "TEST")
-            services.fillWithSomeTestDeals(listOf("456"))        // specify party
+            services.fillWithSomeTestDeals(listOf("456"), parties)
             services.fillWithSomeTestDeals(listOf("123", "789"))
 
             // DOCSTART VaultQueryExample11
-            val criteria = LinearStateQueryCriteria(dealPartyName = listOf(MEGA_CORP.name, MINI_CORP.name))
+            val criteria = LinearStateQueryCriteria(dealParties = parties)
             val results = vaultQuerySvc.queryBy<DealState>(criteria)
             // DOCEND VaultQueryExample11
 
@@ -994,32 +999,97 @@ open class VaultQueryTests {
 
     // specifying Query on Linear state attributes
     @Test
-    fun `consumed linear heads for linearId between two timestamps`() {
+    fun `unconsumed linear heads for linearId between two timestamps`() {
         database.transaction {
-            val issuedStates = services.fillWithSomeTestLinearStates(10)
-            val externalIds = issuedStates.states.map { it.state.data.linearId }.map { it.externalId }[0]
-            val uuids = issuedStates.states.map { it.state.data.linearId }.map { it.id }[1]
 
-            val start = TEST_TX_TIME
-            val end = TEST_TX_TIME.plus(30, ChronoUnit.DAYS)
+            val start = Instant.now()
+            val end = start.plus(10, ChronoUnit.SECONDS)
+
+            services.fillWithSomeTestLinearStates(1, "TEST")
+            sleep(5000)
+            services.fillWithSomeTestLinearStates(1, "TEST")
+
+            // 2 unconsumed states with same external ID
+
             val recordedBetweenExpression = LogicalExpression(TimeInstantType.RECORDED, Operator.BETWEEN, arrayOf(start, end))
             val basicCriteria = VaultQueryCriteria(timeCondition = recordedBetweenExpression)
 
-//            val linearIdsExpression =
-//                    if (externalIds == null)
-//                        LogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.IS_NULL, null)
-//                    else
-//                        LogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.IN, externalIds)
-            val linearIdCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::uuid, Operator.EQUAL, uuids)
-
-//            val customIndexCriteria1 = VaultCustomQueryCriteria(linearIdsExpression)
-            val customIndexCriteria2 = VaultCustomQueryCriteria(linearIdCondition)
-
-//            val criteria = basicCriteria.and(customIndexCriteria1.or(customIndexCriteria2))
-            val criteria = basicCriteria.or(customIndexCriteria2)
+            val criteria = basicCriteria
             val results = vaultQuerySvc.queryBy<LinearState>(criteria)
 
-            assertThat(results.states).hasSize(2)
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    // specifying Query on Linear state attributes
+    @Test
+    fun `unconsumed linear heads for a given external id`() {
+        database.transaction {
+
+            services.fillWithSomeTestLinearStates(1, "TEST1")
+            services.fillWithSomeTestLinearStates(1, "TEST2")
+            val uuid = services.fillWithSomeTestLinearStates(1, "TEST3").states.first().state.data.linearId.id
+
+            // 2 unconsumed states with same external ID
+
+            val externalIdCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.EQUAL, "TEST2")
+            val externalIdCustomCriteria = VaultCustomQueryCriteria(externalIdCondition)
+
+            val results = vaultQuerySvc.queryBy<LinearState>(externalIdCustomCriteria)
+
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    // specifying Query on Linear state attributes
+    @Test
+    fun `unconsumed linear heads for linearId between two timestamps for a given external id`() {
+        database.transaction {
+
+            val start = Instant.now()
+            val end = start.plus(10, ChronoUnit.SECONDS)
+
+            services.fillWithSomeTestLinearStates(1, "TEST1")
+            services.fillWithSomeTestLinearStates(1, "TEST2")
+            sleep(5000)
+            services.fillWithSomeTestLinearStates(1, "TEST3")
+
+            // 2 unconsumed states with same external ID
+
+            val linearIdCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.EQUAL, "TEST2")
+            val customCriteria = VaultCustomQueryCriteria(linearIdCondition)
+
+            val recordedBetweenExpression = LogicalExpression(TimeInstantType.RECORDED, Operator.BETWEEN, arrayOf(start, end))
+            val basicCriteria = VaultQueryCriteria(timeCondition = recordedBetweenExpression)
+
+            val criteria = basicCriteria.and(customCriteria)
+            val results = vaultQuerySvc.queryBy<LinearState>(criteria)
+
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    // specifying Query on Linear state attributes
+    @Test
+    fun `unconsumed linear heads for a given external id or uuid`() {
+        database.transaction {
+
+            services.fillWithSomeTestLinearStates(1, "TEST1")
+            services.fillWithSomeTestLinearStates(1, "TEST2")
+            val uuid = services.fillWithSomeTestLinearStates(1, "TEST3").states.first().state.data.linearId.id
+
+            // 2 unconsumed states with same external ID
+
+            val externalIdCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.EQUAL, "TEST2")
+            val externalIdCustomCriteria = VaultCustomQueryCriteria(externalIdCondition)
+
+            val uuidCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::uuid, Operator.EQUAL, uuid)
+            val uuidCustomCriteria = VaultCustomQueryCriteria(uuidCondition)
+
+            val criteria = externalIdCustomCriteria.or(uuidCustomCriteria)
+            val results = vaultQuerySvc.queryBy<LinearState>(criteria)
+
+            assertThat(results.states).hasSize(1)
         }
     }
 

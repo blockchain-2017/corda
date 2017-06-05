@@ -1,6 +1,7 @@
 package net.corda.node.services.schema
 
 import net.corda.core.contracts.ContractState
+import net.corda.core.contracts.DealState
 import net.corda.core.contracts.FungibleAsset
 import net.corda.core.contracts.LinearState
 import net.corda.core.schemas.MappedSchema
@@ -40,6 +41,8 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
             schemas += state.supportedSchemas()
         if (state is LinearState)
             schemas += VaultSchemaV1   // VaultLinearStates
+        if (state is DealState)
+            schemas += VaultSchemaV1   // VaultLinearStates
         if (state is FungibleAsset<*>)
             schemas += VaultSchemaV1   // VaultFungibleStates
 
@@ -48,6 +51,9 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
 
     // Because schema is always one supported by the state, just delegate.
     override fun generateMappedObject(state: ContractState, schema: MappedSchema): PersistentState {
+        // TODO: DealState to be deprecated (collapsed into LinearState)
+        if ((schema is VaultSchemaV1) && (state is DealState))
+            return VaultSchemaV1.VaultLinearStates(state.linearId, state.ref)
         if ((schema is VaultSchemaV1) && (state is LinearState))
             return VaultSchemaV1.VaultLinearStates(state.linearId)
         if ((schema is VaultSchemaV1) && (state is FungibleAsset<*>))

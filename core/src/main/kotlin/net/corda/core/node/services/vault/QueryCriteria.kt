@@ -4,6 +4,7 @@ import net.corda.core.contracts.Commodity
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.QueryCriteria.AndComposition
 import net.corda.core.node.services.vault.QueryCriteria.OrComposition
@@ -46,7 +47,7 @@ sealed class QueryCriteria {
     data class LinearStateQueryCriteria @JvmOverloads constructor(
             val linearId: List<UniqueIdentifier>? = null,
             val dealRef: List<String>? = null,
-            val dealPartyName: List<X500Name>? = null) : QueryCriteria() {
+            val dealParties: List<AnonymousParty>? = null) : QueryCriteria() {
 
         override fun visit(parser: IQueryCriteriaParser) {
             parser.parseCriteria(this)
