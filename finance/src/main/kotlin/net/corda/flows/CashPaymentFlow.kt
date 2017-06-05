@@ -23,12 +23,15 @@ open class CashPaymentFlow(
         val amount: Amount<Currency>,
         val recipient: Party,
         progressTracker: ProgressTracker,
-        val issuerConstraint: Set<Party>? = null) : AbstractCashFlow(progressTracker) {
+        val issuerConstraint: Set<Party>? = null) : AbstractCashFlow<Pair<SignedTransaction, Map<Party, TxKeyFlow.AnonymousIdentity>>>(progressTracker) {
     /** A straightforward constructor that constructs spends using cash states of any issuer. */
     constructor(amount: Amount<Currency>, recipient: Party) : this(amount, recipient, tracker())
 
     @Suspendable
-    override fun call(): SignedTransaction {
+    override fun call(): Pair<SignedTransaction, Map<Party, TxKeyFlow.AnonymousIdentity>> {
+        progressTracker.currentStep = GENERATING_ID
+        val txIdentities = subFlow(TxKeyFlow.Requester(recipient))
+        val anonymousRecipient = txIdentities[recipient]!!.identity
         progressTracker.currentStep = GENERATING_TX
         val builder: TransactionBuilder = TransactionType.General.Builder(null as Party?)
         // TODO: Have some way of restricting this to states the caller controls
@@ -36,8 +39,7 @@ open class CashPaymentFlow(
             serviceHub.vaultService.generateSpend(
                     builder,
                     amount,
-                    // TODO: Get a transaction key, don't just re-use the owning key
-                    recipient,
+                    anonymousRecipient,
                     issuerConstraint)
         } catch (e: InsufficientBalanceException) {
             throw CashException("Insufficient cash for spend: ${e.message}", e)
@@ -48,6 +50,6 @@ open class CashPaymentFlow(
 
         progressTracker.currentStep = FINALISING_TX
         finaliseTx(setOf(recipient), tx, "Unable to notarise spend")
-        return tx
+        return Pair(tx, txIdentities)
     }
 }

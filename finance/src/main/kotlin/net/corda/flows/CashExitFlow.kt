@@ -22,7 +22,7 @@ import java.util.*
  * issuer.
  */
 @StartableByRPC
-class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, progressTracker: ProgressTracker) : AbstractCashFlow(progressTracker) {
+class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, progressTracker: ProgressTracker) : AbstractCashFlow<SignedTransaction>(progressTracker) {
     constructor(amount: Amount<Currency>, issueRef: OpaqueBytes) : this(amount, issueRef, tracker())
 
     companion object {

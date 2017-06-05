@@ -10,13 +10,14 @@ import net.corda.core.utilities.ProgressTracker
 /**
  * Initiates a flow that produces an Issue/Move or Exit Cash transaction.
  */
-abstract class AbstractCashFlow(override val progressTracker: ProgressTracker) : FlowLogic<SignedTransaction>() {
+abstract class AbstractCashFlow<T>(override val progressTracker: ProgressTracker) : FlowLogic<T>() {
     companion object {
+        object GENERATING_ID : ProgressTracker.Step("Generating anonymous identities")
         object GENERATING_TX : ProgressTracker.Step("Generating transaction")
         object SIGNING_TX : ProgressTracker.Step("Signing transaction")
         object FINALISING_TX : ProgressTracker.Step("Finalising transaction")
 
-        fun tracker() = ProgressTracker(GENERATING_TX, SIGNING_TX, FINALISING_TX)
+        fun tracker() = ProgressTracker(GENERATING_ID, GENERATING_TX, SIGNING_TX, FINALISING_TX)
     }
 
     @Suspendable

@@ -8,6 +8,7 @@ import net.corda.core.toFuture
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import net.corda.flows.CashIssueFlow
+import net.corda.flows.TxKeyFlow
 import net.corda.node.services.network.NetworkMapService
 import net.corda.node.services.transactions.ValidatingNotaryService
 import net.corda.node.utilities.transaction
@@ -33,6 +34,9 @@ class FxTransactionBuildTutorialTest {
                 advertisedServices = *arrayOf(ServiceInfo(NetworkMapService.type), notaryService))
         nodeA = mockNet.createPartyNode(notaryNode.info.address)
         nodeB = mockNet.createPartyNode(notaryNode.info.address)
+        // Let the nodes know about [TxKeyFlow] - in normal use the node startup automatically finds this
+        nodeA.registerInitiatedFlow(TxKeyFlow.Provider::class.java)
+        nodeB.registerInitiatedFlow(TxKeyFlow.Provider::class.java)
         nodeB.registerInitiatedFlow(ForeignExchangeRemoteFlow::class.java)
     }
 
