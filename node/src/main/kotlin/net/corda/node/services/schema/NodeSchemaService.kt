@@ -53,11 +53,11 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
     override fun generateMappedObject(state: ContractState, schema: MappedSchema): PersistentState {
         // TODO: DealState to be deprecated (collapsed into LinearState)
         if ((schema is VaultSchemaV1) && (state is DealState))
-            return VaultSchemaV1.VaultLinearStates(state.linearId, state.ref)
+            return VaultSchemaV1.VaultLinearStates(state.linearId, state.ref, state.parties)
         if ((schema is VaultSchemaV1) && (state is LinearState))
             return VaultSchemaV1.VaultLinearStates(state.linearId)
         if ((schema is VaultSchemaV1) && (state is FungibleAsset<*>))
-            return VaultSchemaV1.VaultFungibleStates(state.amount.quantity)
+            return VaultSchemaV1.VaultFungibleStates(state.owner, state.exitKeys, state.amount.quantity, state.amount.token.issuer.party, state.amount.token.issuer.reference)
         return (state as QueryableState).generateMappedObject(schema)
     }
 }

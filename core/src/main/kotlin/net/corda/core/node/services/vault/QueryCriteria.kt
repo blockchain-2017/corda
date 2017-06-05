@@ -11,6 +11,7 @@ import net.corda.core.node.services.vault.QueryCriteria.OrComposition
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.serialization.OpaqueBytes
 import org.bouncycastle.asn1.x500.X500Name
+import java.security.PublicKey
 import java.time.Instant
 import java.util.*
 import kotlin.reflect.KMutableProperty1
@@ -62,12 +63,12 @@ sealed class QueryCriteria {
     *   [Commodity] as used in [CommodityContract] state
     */
     data class FungibleAssetQueryCriteria @JvmOverloads constructor(
-           val participants: List<X500Name>? = null,
-           val owner: List<X500Name>? = null,
+           val participants: List<PublicKey>? = null,
+           val owner: List<PublicKey>? = null,
            val quantity: Logical<*,Long>? = null,
-           val issuerPartyName: List<X500Name>? = null,
+           val issuerPartyName: List<AnonymousParty>? = null,
            val issuerRef: List<OpaqueBytes>? = null,
-           val exitKeys: List<X500Name>? = null) : QueryCriteria() {
+           val exitKeys: List<PublicKey>? = null) : QueryCriteria() {
 
        override fun visit(parser: IQueryCriteriaParser) {
            parser.parseCriteria(this)
@@ -103,6 +104,7 @@ sealed class QueryCriteria {
 
     data class OrComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
         override fun visit(parser: IQueryCriteriaParser) {
+//            parser.parseOr(this)
             parser.parse(this.a)
             parser.parse(this.b)
 //            return left.or(right)
@@ -122,6 +124,7 @@ interface IQueryCriteriaParser {
     fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria)
     fun <L: Any,R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>)
     fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria)
+//    fun parseOr(criteria: QueryCriteria)
 
     fun parse(criteria: QueryCriteria)
     fun parse(sorting: Sort)

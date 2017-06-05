@@ -3,13 +3,21 @@ package net.corda.node.services.vault
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.crypto.toBase58String
+import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
-import net.corda.core.node.services.vault.*
+import net.corda.core.node.services.vault.IQueryCriteriaParser
+import net.corda.core.node.services.vault.Operator
+import net.corda.core.node.services.vault.QueryCriteria
+import net.corda.core.node.services.vault.Sort
 import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.PersistentStateRef
+import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.serialization.toHexString
+import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import org.bouncycastle.asn1.x500.X500Name
+import java.security.PublicKey
 import java.time.Instant
 import java.util.*
 import javax.persistence.criteria.*
@@ -23,9 +31,12 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
                                    val vaultStates: Root<VaultSchemaV1.VaultStates>,
                                    val contractType: Class<out ContractState>,
                                    private var predicates : MutableList<Predicate> = mutableListOf(),
-                                   private var fromEntities: MutableMap<Class<out PersistentState>, Root<*>> = mutableMapOf()) : IQueryCriteriaParser {
+                                   private var rootEntities: MutableMap<Class<out PersistentState>, Root<*>> = mutableMapOf()) : IQueryCriteriaParser {
 
     override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) {
+
+        rootEntities.putIfAbsent(VaultSchemaV1.VaultStates::class.java, vaultStates)
+        criteriaQuery.select(vaultStates)
 
         // state status
         if (criteria.status == Vault.StateStatus.ALL)
@@ -99,10 +110,18 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
     override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) {
 
         val vaultFungibleStates = criteriaQuery.from(VaultSchemaV1.VaultFungibleStates::class.java)
-        fromEntities.putIfAbsent(VaultSchemaV1.VaultFungibleStates::class.java, vaultFungibleStates)
+        rootEntities.putIfAbsent(VaultSchemaV1.VaultFungibleStates::class.java, vaultFungibleStates)
         criteriaQuery.select(vaultStates)
         val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultFungibleStates.get<PersistentStateRef>("stateRef")))
         predicates.add(joinPredicate)
+
+        // owner
+        criteria.owner?.let {
+            val ownerKeys = criteria.owner as List<PublicKey>
+            val joinFungibleStateToParty = vaultFungibleStates.join<VaultSchemaV1.VaultFungibleStates, CommonSchemaV1.Party>("issuerParty")
+            val owners = ownerKeys.map { it.toBase58String() }
+            predicates.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), owners))
+        }
 
         // quantity
         criteria.quantity?.let {
@@ -111,13 +130,33 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             predicates.add(criteriaBuilder.and(parseGenericOperator(operator, vaultFungibleStates.get<Long>("quantity"), value)))
         }
 
-        criteriaQuery.select(vaultStates)
+        // issuer party
+        criteria.issuerPartyName?.let {
+            val issuerParties = criteria.issuerPartyName as List<AnonymousParty>
+            val joinFungibleStateToParty = vaultFungibleStates.join<VaultSchemaV1.VaultFungibleStates, CommonSchemaV1.Party>("issuerParty")
+            val dealPartyKeys = issuerParties.map { it.owningKey.toBase58String() }
+            predicates.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))
+        }
+
+        // issuer reference
+        criteria.issuerRef?.let {
+            val issuerRefs = (criteria.issuerRef as List<OpaqueBytes>).map { it.bytes }
+            predicates.add(criteriaBuilder.and(vaultFungibleStates.get<ByteArray>("issuerRef").`in`(issuerRefs)))
+        }
+
+        // exit keys
+        criteria.exitKeys?.let {
+            val exitPKs = criteria.exitKeys as List<PublicKey>
+            val joinFungibleStateToParty = vaultFungibleStates.join<VaultSchemaV1.VaultFungibleStates, CommonSchemaV1.Party>("issuerParty")
+            val exitKeys = exitPKs.map { it.toBase58String() }
+            predicates.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), exitKeys))
+        }
     }
 
     override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria) {
 
         val vaultLinearStates = criteriaQuery.from(VaultSchemaV1.VaultLinearStates::class.java)
-        fromEntities.putIfAbsent(VaultSchemaV1.VaultLinearStates::class.java, vaultLinearStates)
+        rootEntities.putIfAbsent(VaultSchemaV1.VaultLinearStates::class.java, vaultLinearStates)
         criteriaQuery.select(vaultStates)
         val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultLinearStates.get<PersistentStateRef>("stateRef")))
         predicates.add(joinPredicate)
@@ -138,6 +177,13 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             predicates.add(criteriaBuilder.and(vaultLinearStates.get<String>("dealReference").`in`(dealRefs)))
         }
 
+        // deal parties
+        criteria.dealParties?.let {
+            val dealParties = criteria.dealParties as List<AnonymousParty>
+            val joinLinearStateToParty = vaultLinearStates.join<VaultSchemaV1.VaultLinearStates, CommonSchemaV1.Party>("dealParties")
+            val dealPartyKeys = dealParties.map { it.owningKey.toBase58String() }
+            predicates.add(criteriaBuilder.equal(joinLinearStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))
+        }
     }
 
     override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>) {
@@ -159,6 +205,14 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
         val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
         predicates.add(joinPredicate)
     }
+
+//    override fun parseOr(criteria: QueryCriteria) {
+//
+//        predicates.add(
+//            criteriaBuilder.or()
+//        )
+//        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+//    }
 
     private fun <T : Comparable<T>> parseGenericOperator(operator: Operator, attribute: Path<out T>?, value: T): Predicate? {
 
@@ -185,16 +239,23 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
     }
 
     override fun parse(sorting: Sort) {
+
+        var orderCriteria: MutableList<Order> = mutableListOf()
+
         sorting.columns.map { (entityStateClass, entityStateColumnName, direction) ->
             val sortEntityRoot =
-                    fromEntities.getOrElse(entityStateClass) { criteriaQuery.from(entityStateClass) }
+                    rootEntities.getOrElse(entityStateClass) { throw VaultQueryException("Missing root entity: $entityStateClass") }
             when (direction) {
                 Sort.Direction.ASC -> {
-                    criteriaQuery.orderBy(criteriaBuilder.asc(sortEntityRoot.get<String>(entityStateColumnName)))
+                    orderCriteria.add(criteriaBuilder.asc(sortEntityRoot.get<String>(entityStateColumnName)))
                 }
                 Sort.Direction.DESC ->
-                    criteriaQuery.orderBy(criteriaBuilder.desc(sortEntityRoot.get<String>(entityStateColumnName)))
+                    orderCriteria.add(criteriaBuilder.desc(sortEntityRoot.get<String>(entityStateColumnName)))
             }
+        }
+
+        if (orderCriteria.isNotEmpty()) {
+            criteriaQuery.orderBy(orderCriteria)
         }
     }
 }

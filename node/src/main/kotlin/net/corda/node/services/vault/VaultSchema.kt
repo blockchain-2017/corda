@@ -1,16 +1,18 @@
 package net.corda.node.services.vault.schemas.jpa
 
 import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.crypto.toBase58String
+import net.corda.core.identity.AbstractParty
+import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
+import net.corda.core.serialization.OpaqueBytes
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1.LinearState
+import java.security.PublicKey
 import java.time.Instant
 import java.util.*
-import javax.persistence.Column
-import javax.persistence.Entity
-import javax.persistence.Index
-import javax.persistence.Table
+import javax.persistence.*
 
 /**
  * JPA representation of the core Vault Schema
@@ -20,7 +22,7 @@ object VaultSchema
 /**
  * First version of the Vault ORM schema
  */
-object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1, mappedTypes = listOf(VaultStates::class.java, VaultLinearStates::class.java, VaultFungibleStates::class.java)) {
+object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1, mappedTypes = listOf(VaultStates::class.java, VaultLinearStates::class.java, VaultFungibleStates::class.java,  CommonSchemaV1.Party::class.java)) {
     @Entity
     @Table(name = "vault_states",
             indexes = arrayOf(Index(name = "state_status_idx", columnList = "state_status")))
@@ -75,8 +77,8 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
              *  Represents a [LinearState] [UniqueIdentifier]
              */
             @Column(name = "external_id")
-            var externalId: String?,     // Generics prevent using a Nullable type
-//            var externalId: String,
+//            var externalId: String?,     // Generics prevent using a Nullable type
+            var externalId: String,
 
             @Column(name = "uuid", nullable = false)
             var uuid: UUID,
@@ -85,14 +87,16 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
 
             /** Deal State attributes **/
             @Column(name = "deal_reference")
-            var dealReference: String
+            var dealReference: String,
 
-//            @get:OneToMany(mappedBy = "deal_state_parties")
-//            var dealParties: Set<Party>
+            @OneToMany(cascade = arrayOf(CascadeType.PERSIST))
+//            @JoinColumn(name = "party_id")
+            var dealParties: Set<CommonSchemaV1.Party>
 
     ) : PersistentState() {
-        constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId ?: "", uuid = uid.id, dealReference = "")
-        constructor(uid: UniqueIdentifier, _dealReference: String) : this(externalId = uid.externalId ?: "", uuid = uid.id, dealReference = _dealReference)
+        constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId ?: "", uuid = uid.id, dealReference = "", dealParties = setOf())
+        constructor(uid: UniqueIdentifier, _dealReference: String, _dealParties: List<AnonymousParty>) : this(externalId = uid.externalId ?: "", uuid = uid.id,
+                dealReference = _dealReference, dealParties = _dealParties.map{ CommonSchemaV1.Party(it) }.toSet() )
     }
 
     @Entity
@@ -100,12 +104,13 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
     class VaultFungibleStates(
 
             /** [ContractState] attributes */
-            //            @OneToMany
+//            @OneToMany
 //            var participants: Set<Party>,
 
             /** [OwnableState] attributes */
-            @Column(name = "owner_key")
-            var ownerKey: String,
+            @OneToOne(cascade = arrayOf(CascadeType.PERSIST))
+            @JoinColumn(name = "party_id", insertable = false, updatable = false)
+            var owner: CommonSchemaV1.Party,
 
             /** [FungibleAsset] attributes
              *
@@ -113,8 +118,8 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
              *  custom contract itself (eg. see currency in Cash contract state)
              */
 
-            //            @OneToMany
-//            var exitKeys: Set<Party>,
+            @OneToMany(cascade = arrayOf(CascadeType.PERSIST))
+            var exitKeys: Set<CommonSchemaV1.Party>,
 
             /** Amount attributes */
 
@@ -122,41 +127,19 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             var quantity: Long,
 
             /** Issuer attributes */
-            //            @OneToOne
-//            @JoinColumn(name = "party_id")
-//            var issuerParty: Party,
-
-            @Column(name = "issuer_party_name")
-            var issuerPartyName: String,
+            @OneToOne(cascade = arrayOf(CascadeType.PERSIST))
+            @JoinColumn(name = "party_id")
+            var issuerParty: CommonSchemaV1.Party,
 
             @Column(name = "issuer_reference")
             var issuerRef: ByteArray
 
     ) : PersistentState() {
-        constructor(_quantity: Long) : this("", _quantity, "", ByteArray(0))
+        constructor(_owner: PublicKey, _exitKeys: Collection<PublicKey>, _quantity: Long, _issuerParty: AnonymousParty, _issuerRef: OpaqueBytes) :
+                this(owner = CommonSchemaV1.Party(AnonymousParty(_owner)),
+                     exitKeys = _exitKeys.map { CommonSchemaV1.Party(AnonymousParty(it)) }.toSet(),
+                     quantity = _quantity,
+                     issuerParty = CommonSchemaV1.Party(_issuerParty),
+                     issuerRef = _issuerRef.bytes)
     }
-
-//    /**
-//     *  Party entity (to be replaced by referencing final Identity Schema)
-//     */
-//    @Entity
-//    @Table(name = "vault_party",
-//            indexes = arrayOf(Index(name = "party_name_idx", columnList = "party_name")))
-//    class VaultParty(
-//            @Id
-//            @GeneratedValue
-//            @Column(name = "id")
-//            var id: Int,
-//
-//            /**
-//             * [Party] attributes
-//             */
-//            @Column(name = "party_name")
-//            var name: String,
-//
-//            @Column(name = "party_key")
-//            var key: String
-//    ) {
-//        constructor(party: net.corda.core.identity.Party) : this(0, party.name.toString(), party.owningKey.toBase58String())
-//    }
 }

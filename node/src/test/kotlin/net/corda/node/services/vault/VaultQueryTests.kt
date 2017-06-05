@@ -11,8 +11,6 @@ import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.QueryCriteria.*
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
-import net.corda.core.utilities.ALICE
-import net.corda.core.utilities.BOB
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.schema.NodeSchemaService
@@ -113,7 +111,7 @@ open class VaultQueryTests {
             services.consumeCash(50.DOLLARS)
 
             // Total unconsumed states = 4 + 3 + 2 + 1 (new cash change) = 10
-            // Total unconsumed states = 6 + 1 + 2 + 1 = 10
+            // Total consumed states = 6 + 1 + 2 + 1 = 10
         }
     }
 
@@ -465,9 +463,9 @@ open class VaultQueryTests {
 
         database.transaction {
 
-            val sortCol1 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, "contract_state_class_name", Sort.Direction.DESC)
-            val sortCol2 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, "state_status", Sort.Direction.ASC)
-            val sortCol3 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, "consumed_timestamp", Sort.Direction.DESC, Sort.NullHandling.NULLS_LAST)
+            val sortCol1 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, VaultSchemaV1.VaultStates::contractStateClassName.name, Sort.Direction.DESC)
+            val sortCol2 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, VaultSchemaV1.VaultStates::stateStatus.name, Sort.Direction.ASC)
+            val sortCol3 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, VaultSchemaV1.VaultStates::consumedTime.name, Sort.Direction.DESC, Sort.NullHandling.NULLS_LAST)
             val sorting = Sort(setOf(sortCol1, sortCol2, sortCol3))
             val result = vaultQuerySvc.queryBy<ContractState>(VaultQueryCriteria(status = Vault.StateStatus.ALL), sorting = sorting)
 
@@ -603,8 +601,6 @@ open class VaultQueryTests {
             val results = vaultQuerySvc.queryBy<LinearState>(criteria)
             // DOCEND VaultQueryExample8
             assertThat(results.states).hasSize(2)
-            assertThat(results.states[0].state.data.linearId).isEqualTo(linearIds.last())
-            assertThat(results.states[1].state.data.linearId).isEqualTo(linearIds.first())
         }
     }
 
@@ -805,7 +801,7 @@ open class VaultQueryTests {
     fun `latest unconsumed deals with party`() {
         database.transaction {
 
-            val parties = listOf(MEGA_CORP.toAnonymous(), MINI_CORP.toAnonymous())
+            val parties = listOf(MEGA_CORP.toAnonymous())
 
             services.fillWithSomeTestLinearStates(2, "TEST")
             services.fillWithSomeTestDeals(listOf("456"), parties)
@@ -830,7 +826,7 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (BOC.ref(1)), issuerKey = BOC_KEY)
 
             // DOCSTART VaultQueryExample14
-            val criteria = FungibleAssetQueryCriteria(issuerPartyName = listOf(BOC.name))
+            val criteria = FungibleAssetQueryCriteria(issuerPartyName = listOf(BOC.toAnonymous()))
             val results = vaultQuerySvc.queryBy<FungibleAsset<*>>(criteria)
             // DOCEND VaultQueryExample14
 
@@ -847,7 +843,7 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (BOC.ref(2)), issuerKey = BOC_KEY, ref = OpaqueBytes.of(2))
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (BOC.ref(3)), issuerKey = BOC_KEY, ref = OpaqueBytes.of(3))
 
-            val criteria = FungibleAssetQueryCriteria(issuerPartyName = listOf(BOC.name),
+            val criteria = FungibleAssetQueryCriteria(issuerPartyName = listOf(BOC.toAnonymous()),
                     issuerRef = listOf(BOC.ref(1).reference, BOC.ref(2).reference))
             val results = vaultQuerySvc.queryBy<FungibleAsset<*>>(criteria)
             assertThat(results.states).hasSize(2)
@@ -862,12 +858,7 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (BOC.ref(1)), issuerKey = BOC_KEY)
 
             // DOCSTART VaultQueryExample15
-            val exitIds = getTestX509Name("TEST")
-//                    if (DUMMY_CASH_ISSUER.party.nameOrNull() == null)
-//                        getTestX509Name("TEST")
-//                    else DUMMY_CASH_ISSUER.party.nameOrNull()
-
-            val criteria = FungibleAssetQueryCriteria(exitKeys = listOf(exitIds))
+            val criteria = FungibleAssetQueryCriteria(exitKeys = listOf(BOC_PUBKEY))
             val results = vaultQuerySvc.queryBy<FungibleAsset<*>>(criteria)
             // DOCEND VaultQueryExample15
 
@@ -880,10 +871,10 @@ open class VaultQueryTests {
         database.transaction {
 
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L), issuedBy = (DUMMY_CASH_ISSUER))
-            // issue some cash to BOB
-            // issue some cash to ALICE
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L),
+                    issuedBy = MEGA_CORP.ref(0), issuerKey = MEGA_CORP_KEY, ownedBy = (MEGA_CORP_PUBKEY))
 
-            val criteria = FungibleAssetQueryCriteria(owner = listOf(BOB.name, ALICE.name))
+            val criteria = FungibleAssetQueryCriteria(owner = listOf(MEGA_CORP_PUBKEY))
             val results = vaultQuerySvc.queryBy<FungibleAsset<*>>(criteria)
             assertThat(results.states).hasSize(1)
         }
@@ -1003,10 +994,10 @@ open class VaultQueryTests {
         database.transaction {
 
             val start = Instant.now()
-            val end = start.plus(10, ChronoUnit.SECONDS)
+            val end = start.plus(1, ChronoUnit.SECONDS)
 
             services.fillWithSomeTestLinearStates(1, "TEST")
-            sleep(5000)
+            sleep(1000)
             services.fillWithSomeTestLinearStates(1, "TEST")
 
             // 2 unconsumed states with same external ID
@@ -1014,8 +1005,7 @@ open class VaultQueryTests {
             val recordedBetweenExpression = LogicalExpression(TimeInstantType.RECORDED, Operator.BETWEEN, arrayOf(start, end))
             val basicCriteria = VaultQueryCriteria(timeCondition = recordedBetweenExpression)
 
-            val criteria = basicCriteria
-            val results = vaultQuerySvc.queryBy<LinearState>(criteria)
+            val results = vaultQuerySvc.queryBy<LinearState>(basicCriteria)
 
             assertThat(results.states).hasSize(1)
         }
@@ -1047,11 +1037,11 @@ open class VaultQueryTests {
         database.transaction {
 
             val start = Instant.now()
-            val end = start.plus(10, ChronoUnit.SECONDS)
+            val end = start.plus(1, ChronoUnit.SECONDS)
 
             services.fillWithSomeTestLinearStates(1, "TEST1")
             services.fillWithSomeTestLinearStates(1, "TEST2")
-            sleep(5000)
+            sleep(1000)
             services.fillWithSomeTestLinearStates(1, "TEST3")
 
             // 2 unconsumed states with same external ID
