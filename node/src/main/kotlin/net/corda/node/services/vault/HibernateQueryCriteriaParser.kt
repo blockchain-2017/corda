@@ -17,32 +17,39 @@ import net.corda.core.serialization.toHexString
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import org.bouncycastle.asn1.x500.X500Name
+import java.lang.reflect.Field
 import java.security.PublicKey
 import java.time.Instant
 import java.util.*
 import javax.persistence.criteria.*
 import kotlin.jvm.internal.MutablePropertyReference1
 import kotlin.reflect.KClass
+import kotlin.reflect.KMutableProperty1
 
 
-class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>,
+class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
+                                   val contractTypeMappings: Map<String, List<String>>,
                                    val criteriaBuilder: CriteriaBuilder,
                                    val criteriaQuery: CriteriaQuery<VaultSchemaV1.VaultStates>,
-                                   val vaultStates: Root<VaultSchemaV1.VaultStates>,
-                                   val contractType: Class<out ContractState>,
-                                   private var predicates : MutableList<Predicate> = mutableListOf(),
-                                   private var rootEntities: MutableMap<Class<out PersistentState>, Root<*>> = mutableMapOf()) : IQueryCriteriaParser {
+                                   val vaultStates: Root<VaultSchemaV1.VaultStates>) : IQueryCriteriaParser {
 
-    override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) {
+    // incrementally build list of join predicates
+    private var joinPredicates = mutableListOf<Predicate>()
+    // incrementally build list of root entities (for later use in Sort parsing)
+    private var rootEntities = mutableMapOf<Class<out PersistentState>, Root<*>>()
+
+    override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) : Collection<Predicate> {
+
+        var predicateSet = mutableSetOf<Predicate>()
 
         rootEntities.putIfAbsent(VaultSchemaV1.VaultStates::class.java, vaultStates)
         criteriaQuery.select(vaultStates)
 
         // state status
         if (criteria.status == Vault.StateStatus.ALL)
-            predicates.add(vaultStates.get<Vault.StateStatus>("stateStatus").`in`(setOf(Vault.StateStatus.UNCONSUMED, Vault.StateStatus.CONSUMED)))
+            predicateSet.add(vaultStates.get<Vault.StateStatus>("stateStatus").`in`(setOf(Vault.StateStatus.UNCONSUMED, Vault.StateStatus.CONSUMED)))
         else
-            predicates.add(criteriaBuilder.equal(vaultStates.get<Vault.StateStatus>("stateStatus"), criteria.status))
+            predicateSet.add(criteriaBuilder.equal(vaultStates.get<Vault.StateStatus>("stateStatus"), criteria.status))
 
         // contract State Types
         val combinedContractTypeTypes = criteria.contractStateTypes?.plus(contractType) ?: setOf(contractType)
@@ -51,24 +58,24 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             val concrete = it.filter { !it.isInterface }.map { it.name }
             val all = interfaces.plus(concrete)
             if (all.isNotEmpty())
-                predicates.add(criteriaBuilder.and(vaultStates.get<String>("contractStateClassName").`in`(all)))
+                predicateSet.add(criteriaBuilder.and(vaultStates.get<String>("contractStateClassName").`in`(all)))
         }
 
         // soft locking
         if (!criteria.includeSoftlockedStates)
-            predicates.add(criteriaBuilder.and(vaultStates.get<String>("lockId").isNull))
+            predicateSet.add(criteriaBuilder.and(vaultStates.get<String>("lockId").isNull))
 
         // notary names
         criteria.notaryName?.let {
             val notaryNames = (criteria.notaryName as List<X500Name>).map { it.toString() }
-            predicates.add(criteriaBuilder.and(vaultStates.get<String>("notaryName").`in`(notaryNames)))
+            predicateSet.add(criteriaBuilder.and(vaultStates.get<String>("notaryName").`in`(notaryNames)))
         }
 
         // state references
         criteria.stateRefs?.let {
             val persistentStateRefs = (criteria.stateRefs as List<StateRef>).map { PersistentStateRef(it.txhash.bytes.toHexString(), it.index) }
             val compositeKey = vaultStates.get<PersistentStateRef>("stateRef")
-            predicates.add(criteriaBuilder.and(compositeKey.`in`(persistentStateRefs)))
+            predicateSet.add(criteriaBuilder.and(compositeKey.`in`(persistentStateRefs)))
         }
 
         // time constraints (recorded, consumed)
@@ -77,7 +84,7 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             val timeInstantType = timeCondition!!.leftOperand
             val timeOperator = timeCondition?.operator
             val timeValue = timeCondition?.rightOperand
-            predicates.add(
+            predicateSet.add(
                 when (timeInstantType) {
                     QueryCriteria.TimeInstantType.CONSUMED ->
                         criteriaBuilder.and(parseOperator(timeOperator, vaultStates.get<Instant>("consumedTime"), timeValue))
@@ -90,6 +97,8 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
         criteria.participantIdentities?.let {
             throw UnsupportedQueryException("Unable to query on contract state participants until identity schemas defined")
         }
+
+        return predicateSet
     }
 
     private fun parseOperator(operator: Operator, attribute: Path<Instant>?, value: Array<Instant>): Predicate? {
@@ -107,27 +116,30 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
         return predicate
     }
 
-    override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) {
+    override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) : Collection<Predicate> {
+
+        var predicateSet = mutableSetOf<Predicate>()
 
         val vaultFungibleStates = criteriaQuery.from(VaultSchemaV1.VaultFungibleStates::class.java)
         rootEntities.putIfAbsent(VaultSchemaV1.VaultFungibleStates::class.java, vaultFungibleStates)
         criteriaQuery.select(vaultStates)
+
         val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultFungibleStates.get<PersistentStateRef>("stateRef")))
-        predicates.add(joinPredicate)
+        predicateSet.add(joinPredicate)
 
         // owner
         criteria.owner?.let {
             val ownerKeys = criteria.owner as List<PublicKey>
             val joinFungibleStateToParty = vaultFungibleStates.join<VaultSchemaV1.VaultFungibleStates, CommonSchemaV1.Party>("issuerParty")
             val owners = ownerKeys.map { it.toBase58String() }
-            predicates.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), owners))
+            predicateSet.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), owners))
         }
 
         // quantity
         criteria.quantity?.let {
             val operator = it.operator
             val value = it.rightOperand
-            predicates.add(criteriaBuilder.and(parseGenericOperator(operator, vaultFungibleStates.get<Long>("quantity"), value)))
+            predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, vaultFungibleStates.get<Long>("quantity"), value)))
         }
 
         // issuer party
@@ -135,13 +147,13 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             val issuerParties = criteria.issuerPartyName as List<AnonymousParty>
             val joinFungibleStateToParty = vaultFungibleStates.join<VaultSchemaV1.VaultFungibleStates, CommonSchemaV1.Party>("issuerParty")
             val dealPartyKeys = issuerParties.map { it.owningKey.toBase58String() }
-            predicates.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))
+            predicateSet.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))
         }
 
         // issuer reference
         criteria.issuerRef?.let {
             val issuerRefs = (criteria.issuerRef as List<OpaqueBytes>).map { it.bytes }
-            predicates.add(criteriaBuilder.and(vaultFungibleStates.get<ByteArray>("issuerRef").`in`(issuerRefs)))
+            predicateSet.add(criteriaBuilder.and(vaultFungibleStates.get<ByteArray>("issuerRef").`in`(issuerRefs)))
         }
 
         // exit keys
@@ -149,32 +161,35 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             val exitPKs = criteria.exitKeys as List<PublicKey>
             val joinFungibleStateToParty = vaultFungibleStates.join<VaultSchemaV1.VaultFungibleStates, CommonSchemaV1.Party>("issuerParty")
             val exitKeys = exitPKs.map { it.toBase58String() }
-            predicates.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), exitKeys))
+            predicateSet.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), exitKeys))
         }
+
+        return predicateSet
     }
 
-    override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria) {
+    override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria) : Collection<Predicate> {
+
+        var predicateSet = mutableSetOf<Predicate>()
 
         val vaultLinearStates = criteriaQuery.from(VaultSchemaV1.VaultLinearStates::class.java)
         rootEntities.putIfAbsent(VaultSchemaV1.VaultLinearStates::class.java, vaultLinearStates)
         criteriaQuery.select(vaultStates)
         val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultLinearStates.get<PersistentStateRef>("stateRef")))
-        predicates.add(joinPredicate)
+        joinPredicates.add(joinPredicate)
 
         // linear ids
         criteria.linearId?.let {
             val uniqueIdentifiers = criteria.linearId as List<UniqueIdentifier>
             val externalIds = uniqueIdentifiers.mapNotNull { it.externalId }
-            if (externalIds.size > 0) {
-                predicates.add(criteriaBuilder.and(vaultLinearStates.get<String>("externalId").`in`(externalIds)))
-            }
-            predicates.add(criteriaBuilder.and(vaultLinearStates.get<UUID>("uuid").`in`(uniqueIdentifiers.map { it.id })))
+            if (externalIds.size > 0)
+                predicateSet.add(criteriaBuilder.and(vaultLinearStates.get<String>("externalId").`in`(externalIds)))
+            predicateSet.add(criteriaBuilder.and(vaultLinearStates.get<UUID>("uuid").`in`(uniqueIdentifiers.map { it.id })))
         }
 
         // deal refs
         criteria.dealRef?.let {
             val dealRefs = criteria.dealRef as List<String>
-            predicates.add(criteriaBuilder.and(vaultLinearStates.get<String>("dealReference").`in`(dealRefs)))
+            predicateSet.add(criteriaBuilder.and(vaultLinearStates.get<String>("dealReference").`in`(dealRefs)))
         }
 
         // deal parties
@@ -182,37 +197,71 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
             val dealParties = criteria.dealParties as List<AnonymousParty>
             val joinLinearStateToParty = vaultLinearStates.join<VaultSchemaV1.VaultLinearStates, CommonSchemaV1.Party>("dealParties")
             val dealPartyKeys = dealParties.map { it.owningKey.toBase58String() }
-            predicates.add(criteriaBuilder.equal(joinLinearStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))
+            predicateSet.add(criteriaBuilder.equal(joinLinearStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))
         }
+
+        return predicateSet
     }
 
-    override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>) {
+    override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): Collection<Predicate> {
 
-        val attribute = criteria.indexExpression.leftOperand
-        val entity = (attribute as MutablePropertyReference1).owner
-        val entityClass = (attribute.owner as KClass<*>).java
+        var predicateSet = mutableSetOf<Predicate>()
+
+        val (entityClass, attributeName) = resolveIt(criteria.indexExpression.leftOperand)
+
         val entityRoot = criteriaQuery.from(entityClass)
-
-        val attributeName = attribute.name
-        val operator = criteria.indexExpression.operator
-        val value = criteria.indexExpression.rightOperand
-
-        predicates.add(
-            criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value))
-        )
-
+        rootEntities.putIfAbsent(entityClass as Class<PersistentState>, entityRoot)
         criteriaQuery.select(vaultStates)
         val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
-        predicates.add(joinPredicate)
+        joinPredicates.add(joinPredicate)
+
+        val operator = criteria.indexExpression.operator
+        val value = criteria.indexExpression.rightOperand // TODO: Java Test failing here (.toString().javaClass)
+
+        predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
+
+        return predicateSet
     }
 
-//    override fun parseOr(criteria: QueryCriteria) {
-//
-//        predicates.add(
-//            criteriaBuilder.or()
-//        )
-//        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-//    }
+    private fun resolveIt(attribute: Any): Pair<Class<out Any>, String> {
+
+        val attributeClazzAndName : Pair<Class<out Any>, String> =
+            when (attribute) {
+                is Field -> {
+                    Pair(attribute.declaringClass, attribute.name)
+                }
+                is KMutableProperty1<*,*> -> {
+                    val entity = (attribute as MutablePropertyReference1).owner
+                    Pair((attribute.owner as KClass<*>).java, attribute.name)
+                }
+                else -> throw VaultQueryException("Unrecognised attribute specified: $attribute")
+            }
+        return attributeClazzAndName
+    }
+
+    override fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
+
+        var predicateSet = mutableSetOf<Predicate>()
+        val leftPredicates = parse(left)
+        val rightPredicates = parse(right)
+
+        val orPredicate = criteriaBuilder.and(criteriaBuilder.or(*leftPredicates.toTypedArray(), *rightPredicates.toTypedArray()))
+        predicateSet.add(orPredicate)
+
+        return predicateSet
+    }
+
+    override fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
+
+        var predicateSet = mutableSetOf<Predicate>()
+        val leftPredicates = parse(left)
+        val rightPredicates = parse(right)
+
+        val andPredicate = criteriaBuilder.and(criteriaBuilder.and(*leftPredicates.toTypedArray(), *rightPredicates.toTypedArray()))
+        predicateSet.add(andPredicate)
+
+        return predicateSet
+    }
 
     private fun <T : Comparable<T>> parseGenericOperator(operator: Operator, attribute: Path<out T>?, value: T): Predicate? {
 
@@ -233,14 +282,19 @@ class HibernateQueryCriteriaParser(val contractTypeMappings: Map<String, List<St
         return predicate
     }
 
-    override fun parse(criteria: QueryCriteria) {
-        criteria.visit(this)
-        criteriaQuery.where(*predicates.toTypedArray())
+    override fun parse(criteria: QueryCriteria) : Collection<Predicate> {
+
+        val predicateSet = criteria.visit(this)
+
+        val combinedPredicates = joinPredicates.plus(predicateSet)
+        criteriaQuery.where(*combinedPredicates.toTypedArray())
+
+        return predicateSet
     }
 
     override fun parse(sorting: Sort) {
 
-        var orderCriteria: MutableList<Order> = mutableListOf()
+        var orderCriteria = mutableListOf<Order>()
 
         sorting.columns.map { (entityStateClass, entityStateColumnName, direction) ->
             val sortEntityRoot =

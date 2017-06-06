@@ -22,7 +22,6 @@ import net.corda.node.services.schema.VaultLinearStateEntity;
 import net.corda.node.services.vault.schemas.jpa.*;
 import net.corda.schemas.*;
 import net.corda.testing.node.MockServices;
-import org.bouncycastle.asn1.x500.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.exposed.sql.Database;
 import org.junit.After;
@@ -78,7 +77,8 @@ public class VaultQueryJavaTests {
 
             @Override
             public VaultQueryService getVaultQueryService() {
-                return new RequeryVaultQueryServiceImpl(dataSourceProps);
+                HibernateConfiguration hibernateConfig = new HibernateConfiguration(new NodeSchemaService());
+                return new HibernateVaultQueryImpl(hibernateConfig);
             }
 
             @Override
@@ -128,7 +128,7 @@ public class VaultQueryJavaTests {
             Set<Class<ContractState>> contractStateTypes = new HashSet(Collections.singletonList(Cash.State.class));
             Vault.StateStatus status = Vault.StateStatus.CONSUMED;
 
-            VaultQueryCriteria criteria = new VaultQueryCriteria(status, null, contractStateTypes);
+            VaultQueryCriteria criteria = new VaultQueryCriteria(status, contractStateTypes);
             Vault.Page<ContractState> results = vaultQuerySvc.queryBy(Cash.State.class, criteria);
             // DOCEND VaultJavaQueryExample1
 
@@ -153,7 +153,7 @@ public class VaultQueryJavaTests {
             @SuppressWarnings("unchecked")
             Set<Class<ContractState>> contractStateTypes = new HashSet(Collections.singletonList(Cash.State.class));
 
-            QueryCriteria vaultCriteria = new VaultQueryCriteria(status, null, contractStateTypes);
+            QueryCriteria vaultCriteria = new VaultQueryCriteria(status, contractStateTypes);
 
             List<UniqueIdentifier> linearIds = Arrays.asList(uid);
             List<AnonymousParty> dealParties = Arrays.asList(getMEGA_CORP().toAnonymous());
@@ -237,7 +237,7 @@ public class VaultQueryJavaTests {
             @SuppressWarnings("unchecked")
             Set<Class<ContractState>> contractStateTypes = new HashSet(Collections.singletonList(Cash.State.class));
 
-            VaultQueryCriteria criteria = new VaultQueryCriteria(Vault.StateStatus.UNCONSUMED, null, contractStateTypes);
+            VaultQueryCriteria criteria = new VaultQueryCriteria(Vault.StateStatus.UNCONSUMED, contractStateTypes);
             Vault.PageAndUpdates<ContractState> results = vaultQuerySvc.trackBy(criteria);
 
             Vault.Page<ContractState> snapshot = results.getCurrent();
@@ -263,7 +263,7 @@ public class VaultQueryJavaTests {
             // DOCSTART VaultJavaQueryExample2
             @SuppressWarnings("unchecked")
             Set<Class<ContractState>> contractStateTypes = new HashSet(Collections.singletonList(DealState.class));
-            QueryCriteria vaultCriteria = new VaultQueryCriteria(Vault.StateStatus.UNCONSUMED, null, contractStateTypes);
+            QueryCriteria vaultCriteria = new VaultQueryCriteria(Vault.StateStatus.UNCONSUMED, contractStateTypes);
 
             List<UniqueIdentifier> linearIds = Arrays.asList(uid);
             List<AnonymousParty> dealParty = Arrays.asList(getMEGA_CORP().toAnonymous());

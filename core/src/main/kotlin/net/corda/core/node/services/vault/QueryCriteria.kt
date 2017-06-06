@@ -14,6 +14,7 @@ import org.bouncycastle.asn1.x500.X500Name
 import java.security.PublicKey
 import java.time.Instant
 import java.util.*
+import javax.persistence.criteria.Predicate
 import kotlin.reflect.KMutableProperty1
 
 /**
@@ -23,22 +24,22 @@ import kotlin.reflect.KMutableProperty1
 @CordaSerializable
 sealed class QueryCriteria {
 
-    abstract fun visit(parser: IQueryCriteriaParser)
+    abstract fun visit(parser: IQueryCriteriaParser): Collection<Predicate>
 
     /**
      * VaultQueryCriteria: provides query by attributes defined in [VaultSchema.VaultStates]
      */
     data class VaultQueryCriteria @JvmOverloads constructor (
             val status: Vault.StateStatus = Vault.StateStatus.UNCONSUMED,
-            val stateRefs: List<StateRef>? = null,
             val contractStateTypes: Set<Class<out ContractState>>? = null,
+            val stateRefs: List<StateRef>? = null,
             val notaryName: List<X500Name>? = null,
             val includeSoftlockedStates: Boolean = true,
             val timeCondition: Logical<TimeInstantType, Array<Instant>>? = null,
             val participantIdentities: List<X500Name>? = null) : QueryCriteria() {
 
-        override fun visit(parser: IQueryCriteriaParser) {
-            parser.parseCriteria(this)
+        override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
+            return parser.parseCriteria(this)
         }
     }
 
@@ -50,8 +51,8 @@ sealed class QueryCriteria {
             val dealRef: List<String>? = null,
             val dealParties: List<AnonymousParty>? = null) : QueryCriteria() {
 
-        override fun visit(parser: IQueryCriteriaParser) {
-            parser.parseCriteria(this)
+        override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
+            return parser.parseCriteria(this)
         }
     }
 
@@ -70,8 +71,8 @@ sealed class QueryCriteria {
            val issuerRef: List<OpaqueBytes>? = null,
            val exitKeys: List<PublicKey>? = null) : QueryCriteria() {
 
-       override fun visit(parser: IQueryCriteriaParser) {
-           parser.parseCriteria(this)
+       override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
+           return parser.parseCriteria(this)
        }
    }
 
@@ -88,26 +89,21 @@ sealed class QueryCriteria {
      */
     data class VaultCustomQueryCriteria<L: Any, R : Comparable<R>>(val indexExpression: Logical<KMutableProperty1<L,R>, out R>) : QueryCriteria() {
 
-        override fun visit(parser: IQueryCriteriaParser) {
-            parser.parseCriteria(this)
+        override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
+            return parser.parseCriteria(this)
         }
     }
     // enable composition of [QueryCriteria]
     data class AndComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
 
-        override fun visit(parser: IQueryCriteriaParser) {
-            parser.parse(this.a)
-            parser.parse(this.b)
-//            return left.and(right)
+        override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
+            return parser.parseAnd(this.a, this.b)
         }
     }
 
     data class OrComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
-        override fun visit(parser: IQueryCriteriaParser) {
-//            parser.parseOr(this)
-            parser.parse(this.a)
-            parser.parse(this.b)
-//            return left.or(right)
+        override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
+            return parser.parseOr(this.a, this.b)
         }
     }
 
@@ -120,13 +116,14 @@ sealed class QueryCriteria {
 }
 
 interface IQueryCriteriaParser {
-    fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria)
-    fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria)
-    fun <L: Any,R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>)
-    fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria)
-//    fun parseOr(criteria: QueryCriteria)
+    fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): Collection<Predicate>
+    fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): Collection<Predicate>
+    fun <L: Any,R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): Collection<Predicate>
+    fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): Collection<Predicate>
+    fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
+    fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
 
-    fun parse(criteria: QueryCriteria)
+    fun parse(criteria: QueryCriteria) : Collection<Predicate>
     fun parse(sorting: Sort)
 }
 

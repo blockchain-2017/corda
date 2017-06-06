@@ -34,9 +34,6 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
 
         log.info("Vault Query for contract type: $contractType, criteria: $criteria, pagination: $paging, sorting: $sorting")
 
-        // enrich criteria with requested type
-//        val typedCriteria = setCriteriaDefaults(criteria, contractType)
-
         val session = sessionFactory.withOptions().
                 connection(TransactionManager.current().connection).
                 openSession()
@@ -46,7 +43,8 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
             val queryRootVaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
 
             val contractTypeMappings = resolveUniqueContractStateTypes(session)
-            val criteriaParser = HibernateQueryCriteriaParser(contractTypeMappings, criteriaBuilder, criteriaQuery, queryRootVaultStates, contractType)
+            // TODO: revisit (use single instance of parser for all queries)
+            val criteriaParser = HibernateQueryCriteriaParser(contractType, contractTypeMappings, criteriaBuilder, criteriaQuery, queryRootVaultStates)
 
             try {
                 // parse criteria and build where predicates
@@ -96,29 +94,6 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         }
     }
 
-    private fun setCriteriaDefaults(criteria: QueryCriteria, contractType: Class<out ContractState>): QueryCriteria {
-        val contractTypes = deriveContractTypes(contractType)
-
-        if (criteria is QueryCriteria.AndComposition) {
-            setCriteriaDefaults(criteria.a, contractType)
-            setCriteriaDefaults(criteria.b, contractType)
-        }
-
-        if (criteria is QueryCriteria.OrComposition) {
-            setCriteriaDefaults(criteria.a, contractType)
-            setCriteriaDefaults(criteria.b, contractType)
-        }
-
-        val criteria =
-                if (criteria is QueryCriteria.VaultQueryCriteria) {
-                    val combinedContractStateTypes = criteria.contractStateTypes?.plus(contractTypes) ?: contractTypes
-                    criteria.copy(contractStateTypes = combinedContractStateTypes)
-                } else {
-                    criteria.and(QueryCriteria.VaultQueryCriteria(contractStateTypes = contractTypes))
-                }
-        return criteria
-    }
-
     override fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.PageAndUpdates<T> {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
@@ -127,7 +102,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
      * Maintain a list of contract state interfaces to concrete types stored in the vault
      * for usage in generic queries of type queryBy<LinearState> or queryBy<FungibleState<*>>
      */
-    fun resolveUniqueContractStateTypes(session: EntityManager) : MutableMap<String, MutableList<String>> {
+    fun resolveUniqueContractStateTypes(session: EntityManager) : Map<String, List<String>> {
 
             val criteria = criteriaBuilder.createQuery(String::class.java)
             val vaultStates = criteria.from(VaultSchemaV1.VaultStates::class.java)

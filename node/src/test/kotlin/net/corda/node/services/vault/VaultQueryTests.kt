@@ -671,7 +671,6 @@ open class VaultQueryTests {
 
             val txns = services.fillWithSomeTestLinearStates(1, "TEST")
             val linearState = txns.states.first()
-            val linearId = linearState.state.data.linearId
             val linearState2 = services.evolveLinearState(linearState)  // consume current and produce new state reference
             val linearState3 = services.evolveLinearState(linearState2)  // consume current and produce new state reference
             services.evolveLinearState(linearState3)  // consume current and produce new state reference
@@ -1018,7 +1017,6 @@ open class VaultQueryTests {
 
             services.fillWithSomeTestLinearStates(1, "TEST1")
             services.fillWithSomeTestLinearStates(1, "TEST2")
-            val uuid = services.fillWithSomeTestLinearStates(1, "TEST3").states.first().state.data.linearId.id
 
             // 2 unconsumed states with same external ID
 
@@ -1079,7 +1077,7 @@ open class VaultQueryTests {
             val criteria = externalIdCustomCriteria.or(uuidCustomCriteria)
             val results = vaultQuerySvc.queryBy<LinearState>(criteria)
 
-            assertThat(results.states).hasSize(1)
+            assertThat(results.states).hasSize(2)
         }
     }
 

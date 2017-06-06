@@ -20,6 +20,7 @@ import net.corda.node.services.vault.schemas.requery.VaultSchema
 import net.corda.node.services.vault.schemas.requery.VaultStatesEntity
 import org.bouncycastle.asn1.x500.X500Name
 import java.time.Instant
+import javax.persistence.criteria.Predicate
 import kotlin.reflect.KProperty1
 import kotlin.reflect.jvm.javaMethod
 
@@ -56,11 +57,11 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         }
     }
 
-    override fun parse(criteria: QueryCriteria) {
-        criteria.visit(this)
+    override fun parse(criteria: QueryCriteria): Collection<Predicate> {
+        return criteria.visit(this)
     }
 
-    override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) {
+    override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): Collection<Predicate> {
 
         // state status
         val attribute = findAttribute(VaultSchema.VaultStates::stateStatus).get()
@@ -116,6 +117,8 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         }
 
         query.where(chainedConditions)
+
+        return emptySet()
     }
 
     private fun parseOperator(property: KProperty1<VaultSchema.VaultStates, Instant?>, operator: Operator, value: Array<Instant>): io.requery.kotlin.Logical<out Expression<Instant?>, out Any?> {
@@ -133,7 +136,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         return condition
     }
 
-    override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria) {
+    override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): Collection<Predicate> {
 
         // UNCONSUMED by default
         val attribute = findAttribute(VaultSchema.VaultStates::stateStatus).get()
@@ -168,9 +171,11 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
             throw InvalidQueryCriteriaException(QueryCriteria.LinearStateQueryCriteria::class.java)
 
         query.where(logicalCondition)
+
+        return emptySet()
     }
 
-    override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) {
+    override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): Collection<Predicate> {
         criteria.quantity
         criteria.issuerPartyName
         criteria.issuerRef
@@ -185,9 +190,11 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
             val logicalCondition = attribute.greaterThan(it.rightOperand)
             query.where(logicalCondition)
         }
+
+        return emptySet()
     }
 
-    override fun <L: Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>) {
+    override fun <L: Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): Collection<Predicate> {
 
         val logicalExpr = criteria.indexExpression
         val property = logicalExpr?.leftOperand!!
@@ -218,6 +225,8 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
                 }
 
         query.where(logicalCondition)
+
+        return emptySet()
     }
 
     override fun parse(sorting: Sort) {
@@ -275,6 +284,14 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         }
 
         return setOf(VaultSchema.VaultStates::class.java).plus(entityClasses).toList()
+    }
+
+    override fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    override fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 }
 

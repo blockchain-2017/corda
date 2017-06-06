@@ -9,6 +9,7 @@ import net.corda.contracts.testing.fillWithSomeTestDeals
 import net.corda.contracts.testing.fillWithSomeTestLinearStates
 import net.corda.core.contracts.*
 import net.corda.core.days
+import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultService
 import net.corda.core.node.services.vault.*
@@ -228,7 +229,7 @@ class RequeryQueryCriteriaParserTest {
             val query = select(VaultSchema.VaultStates::class)
             val criteriaParse = RequeryQueryCriteriaParser(mapOf(FungibleAsset::class.java.name to listOf(Cash.State::class.java.name)), query)
 
-            val owners = listOf(MINI_CORP.name)
+            val owners = listOf(MINI_CORP_PUBKEY)
             val criteria1 = QueryCriteria.FungibleAssetQueryCriteria(owner = owners)
             criteriaParse.parse(criteria1)
 
@@ -236,7 +237,7 @@ class RequeryQueryCriteriaParserTest {
             val criteria4 = QueryCriteria.FungibleAssetQueryCriteria(quantity = quantityExpression)
             criteriaParse.parse(criteria4)
 
-            val issuerPartyNames = listOf(BOC.name)
+            val issuerPartyNames = listOf(AnonymousParty(BOC_PUBKEY))
             val criteria5 = QueryCriteria.FungibleAssetQueryCriteria(issuerPartyName = issuerPartyNames)
             criteriaParse.parse(criteria5)
 
@@ -244,7 +245,7 @@ class RequeryQueryCriteriaParserTest {
             val criteria6 = QueryCriteria.FungibleAssetQueryCriteria(issuerRef = issuerPartyRefs)
             criteriaParse.parse(criteria6)
 
-            val exitKeyIds = listOf(getTestX509Name("TEST"))
+            val exitKeyIds = listOf(MINI_CORP_PUBKEY)
             val criteria7 = QueryCriteria.FungibleAssetQueryCriteria(exitKeys = exitKeyIds)
             criteriaParse.parse(criteria7)
 
