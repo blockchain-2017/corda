@@ -111,19 +111,21 @@ data class Sort(val columns: Collection<SortColumn>) {
     @CordaSerializable
     enum class NullHandling {
         NULLS_FIRST,
-        NULLS_LAST
+        NULLS_LAST,
+        NULLS_NONE
     }
     /**
      * [columnName] should reference a persisted entity attribute name as defined by the associated mapped schema
      * (for example, [VaultSchema.VaultStates::txId.name])
      */
     @CordaSerializable
-    data class SortColumn(/*val columnName: String,*/
-                               /*val columnName: KProperty1<T, out R>,*/
-                               val entityStateClass: Class<out PersistentState>,
-                               val entityStateColumnName: String,
-                               val direction: Sort.Direction = Sort.Direction.ASC,
-                               val nullHandling: Sort.NullHandling = if (direction == Sort.Direction.ASC) Sort.NullHandling.NULLS_LAST else Sort.NullHandling.NULLS_FIRST)
+    data class SortColumn(val entityStateClass: Class<out PersistentState>,
+                          val entityStateColumnName: String,
+                          val direction: Sort.Direction = Sort.Direction.ASC,
+                          val nullHandling: Sort.NullHandling = NullHandling.NULLS_NONE)
+    // TODO: JPA Criteria does not support NULL handling
+    // Change the default when we switch to either Hibernate (native) or Requery which both support NULLS handling in their respective Criteria API's
+    //  if (direction == Sort.Direction.ASC) Sort.NullHandling.NULLS_LAST else Sort.NullHandling.NULLS_FIRST)
 }
 
 /**
