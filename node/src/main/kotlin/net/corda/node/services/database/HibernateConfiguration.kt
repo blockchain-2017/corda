@@ -26,13 +26,17 @@ class HibernateConfiguration(val schemaService: SchemaService) {
     val sessionFactories = ConcurrentHashMap<MappedSchema, SessionFactory>()
 
     init {
-        schemaService.schemaOptions.map { it.key }.forEach {
-            makeSessionFactoryForSchema(it)
+        schemaService.schemaOptions.map { it.key }.forEach { mappedSchema ->
+            sessionFactories.computeIfAbsent(mappedSchema, { makeSessionFactoryForSchema(mappedSchema) })
         }
     }
 
+    fun sessionFactoryForRegisteredSchemas(): SessionFactory {
+        return sessionFactoryForSchemas(*schemaService.schemaOptions.map { it.key }.toTypedArray())
+    }
+
     fun sessionFactoryForSchema(schema: MappedSchema): SessionFactory {
-        return sessionFactories.computeIfAbsent(schema, { makeSessionFactoryForSchema(it) })
+        return sessionFactories.computeIfAbsent(schema, { sessionFactoryForSchemas(schema) })
     }
 
     fun sessionFactoryForSchemas(vararg schemas: MappedSchema): SessionFactory {

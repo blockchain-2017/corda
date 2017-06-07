@@ -70,7 +70,6 @@ object CommonSchemaV1 : MappedSchema(schemaFamily = CommonSchema.javaClass, vers
             var issuerRef: ByteArray
 
     ) : PersistentState() {
-        constructor() : this("", 0L, "", ByteArray(0))
         constructor(_ownerKey: String, _quantity: Long, _issuerParty: net.corda.core.identity.AbstractParty, _issuerRef: ByteArray)
                 : this(ownerKey = _ownerKey, quantity = _quantity, issuerPartyName = _issuerParty.nameOrNull()?.toString() ?: _issuerParty.toString(), issuerRef = _issuerRef)
     }

@@ -1,7 +1,10 @@
 package net.corda.schemas
 
+import net.corda.core.crypto.toBase58String
+import net.corda.core.identity.AbstractParty
 import net.corda.core.schemas.MappedSchema
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
+import java.security.PublicKey
 import java.time.Instant
 import javax.persistence.Column
 import javax.persistence.Entity
@@ -14,17 +17,13 @@ import javax.persistence.Table
  */
 object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSchema.javaClass, version = 1, mappedTypes = listOf(PersistentCommercialPaperState::class.java)) {
     @Entity
-    @Table(name = "cp_states",
-           indexes = arrayOf(Index(name = "ccy_code_index", columnList = "ccy_code"),
-                             Index(name = "maturity_index", columnList = "maturity_instant"),
-                             Index(name = "face_value_index", columnList = "face_value")))
+    @Table(name = "cp_states_v2",
+           indexes = arrayOf(Index(name = "ccy_code_index2", columnList = "ccy_code"),
+                             Index(name = "maturity_index2", columnList = "maturity_instant")))
     class PersistentCommercialPaperState(
 
             @Column(name = "maturity_instant")
             var maturity: Instant,
-
-            @Column(name = "face_value")
-            var faceValue: Long,
 
             @Column(name = "ccy_code", length = 3)
             var currency: String,
@@ -33,7 +32,17 @@ object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSche
             var faceValueIssuerParty: String,
 
             @Column(name = "face_value_issuer_ref")
-            var faceValueIssuerRef: ByteArray
+            var faceValueIssuerRef: ByteArray,
 
-    ) : CommonSchemaV1.FungibleState()
+            @Transient
+            val _owner: PublicKey,
+            @Transient
+            // face value
+            val _quantity: Long,
+            @Transient
+            val _issuerParty: AbstractParty,
+            @Transient
+            val _issuerRef: ByteArray
+
+    ) : CommonSchemaV1.FungibleState(_owner.toBase58String(), _quantity, _issuerParty, _issuerRef)
 }

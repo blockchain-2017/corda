@@ -1,6 +1,7 @@
 package net.corda.node.services.vault;
 
 import com.google.common.collect.ImmutableSet;
+import jdk.internal.dynalink.support.*;
 import kotlin.Pair;
 import net.corda.contracts.DealState;
 import net.corda.contracts.asset.Cash;
@@ -32,8 +33,11 @@ import rx.Observable;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.invoke.*;
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.function.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -194,6 +198,11 @@ public class VaultQueryJavaTests {
             try {
                 Field attributeCurrency = CashSchemaV1.PersistentCashState.class.getDeclaredField("currency");
                 Field attributeQuantity = CashSchemaV1.PersistentCashState.class.getDeclaredField("pennies");
+
+                // MethodHandle
+//                Function<CashSchemaV1.PersistentCashState, String> currencyAttribute = CashSchemaV1.PersistentCashState::getCurrency;
+//                Class<? extends Function> clazz = currencyAttribute.getClass();
+//                MethodHandles.lookup().revealDirect(currencyAttribute);
 
                 Logical currencyIndex = new LogicalExpression(attributeCurrency, Operator.EQUAL, Currency.getInstance("USD"));
                 Logical quantityIndex = new LogicalExpression(attributeQuantity, Operator.GREATER_THAN_OR_EQUAL, 10L);

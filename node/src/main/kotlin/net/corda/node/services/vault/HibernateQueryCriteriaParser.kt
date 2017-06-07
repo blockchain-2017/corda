@@ -209,16 +209,28 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         val (entityClass, attributeName) = resolveIt(criteria.indexExpression.leftOperand)
 
-        val entityRoot = criteriaQuery.from(entityClass)
-        rootEntities.putIfAbsent(entityClass as Class<PersistentState>, entityRoot)
-        criteriaQuery.select(vaultStates)
-        val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
-        joinPredicates.add(joinPredicate)
+        try {
+            val entityRoot = criteriaQuery.from(entityClass)
+            rootEntities.putIfAbsent(entityClass as Class<PersistentState>, entityRoot)
+            criteriaQuery.select(vaultStates)
+            val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
+            joinPredicates.add(joinPredicate)
 
-        val operator = criteria.indexExpression.operator
-        val value = criteria.indexExpression.rightOperand // TODO: Java Test failing here (.toString().javaClass)
+            val operator = criteria.indexExpression.operator
+            val value = criteria.indexExpression.rightOperand // TODO: Java Test failing here (.toString().javaClass)
 
-        predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
+            predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
+        }
+        catch (e: Exception) {
+            e?.message?.let { message ->
+                if (message.contains("Not an entity"))
+                    throw VaultQueryException("""
+                    Please register the entity '${entityClass.name.substringBefore('$')}' class in your CorDapp's CordaPluginRegistry configuration (requiredSchemas attribute)
+                    and ensure you have declared (in supportedSchemas()) and mapped (in generateMappedObject()) the schema in the associated contract state's QueryableState interface implementation.
+                    See https://docs.corda.net/persistence.html?highlight=persistence for more information""")
+            }
+            throw VaultQueryException("Parsing error: ${e.message}")
+        }
 
         return predicateSet
     }

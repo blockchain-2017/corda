@@ -20,6 +20,8 @@ import net.corda.core.schemas.QueryableState
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.Emoji
 import net.corda.schemas.CommercialPaperSchemaV1
+import net.corda.schemas.CommercialPaperSchemaV2
+import java.security.PublicKey
 import java.time.Instant
 import java.util.*
 
@@ -83,7 +85,7 @@ class CommercialPaper : Contract {
 
         // DOCSTART VaultIndexedQueryCriteria
         /** Object Relational Mapping support. */
-        override fun supportedSchemas(): Iterable<MappedSchema> = listOf(CommercialPaperSchemaV1)
+        override fun supportedSchemas(): Iterable<MappedSchema> = listOf(CommercialPaperSchemaV1, CommercialPaperSchemaV2)
 
         /** Object Relational Mapping support. */
         override fun generateMappedObject(schema: MappedSchema): PersistentState {
@@ -94,6 +96,16 @@ class CommercialPaper : Contract {
                         owner = this.owner.owningKey.toBase58String(),
                         maturity = this.maturityDate,
                         faceValue = this.faceValue.quantity,
+                        currency = this.faceValue.token.product.currencyCode,
+                        faceValueIssuerParty = this.faceValue.token.issuer.party.owningKey.toBase58String(),
+                        faceValueIssuerRef = this.faceValue.token.issuer.reference.bytes
+                )
+                is CommercialPaperSchemaV2 -> CommercialPaperSchemaV2.PersistentCommercialPaperState(
+                        _issuerParty = this.issuance.party,
+                        _issuerRef = this.issuance.reference.bytes,
+                        _owner = this.owner,
+                        maturity = this.maturityDate,
+                        _quantity = this.faceValue.quantity,
                         currency = this.faceValue.token.product.currencyCode,
                         faceValueIssuerParty = this.faceValue.token.issuer.party.owningKey.toBase58String(),
                         faceValueIssuerRef = this.faceValue.token.issuer.reference.bytes

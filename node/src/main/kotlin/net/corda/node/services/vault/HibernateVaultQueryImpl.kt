@@ -7,14 +7,16 @@ import net.corda.core.contracts.TransactionState
 import net.corda.core.crypto.SecureHash
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultQueryService
-import net.corda.core.node.services.vault.*
+import net.corda.core.node.services.vault.MAX_PAGE_SIZE
+import net.corda.core.node.services.vault.PageSpecification
+import net.corda.core.node.services.vault.QueryCriteria
+import net.corda.core.node.services.vault.Sort
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.storageKryo
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
-import net.corda.schemas.CashSchemaV1
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.lang.Exception
 import javax.persistence.EntityManager
@@ -26,7 +28,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         val log = loggerFor<HibernateVaultQueryImpl>()
     }
 
-    private val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CashSchemaV1)
+    private val sessionFactory = hibernateConfig.sessionFactoryForRegisteredSchemas()
     private val criteriaBuilder = sessionFactory.criteriaBuilder
 
     @Throws(VaultQueryException::class)

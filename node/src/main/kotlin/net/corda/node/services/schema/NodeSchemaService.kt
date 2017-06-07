@@ -23,16 +23,20 @@ import net.corda.schemas.CashSchemaV3
  * TODO: support plugins for schema version upgrading or custom mapping not supported by original [QueryableState].
  * TODO: create whitelisted tables when a CorDapp is first installed
  */
-class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
+class NodeSchemaService(customSchemas: Set<MappedSchema> = emptySet()) : SchemaService, SingletonSerializeAsToken() {
+
     // Currently does not support configuring schema options.
 
     // Whitelisted tables are those required by internal Corda services
-    // For example, cash is used by the vault for coin selection
-    // This whitelist will grow as we add further functionality (eg. other fungible assets)
-    override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = mapOf(Pair(CashSchemaV1, SchemaService.SchemaOptions()),
-                                                                                       Pair(CommonSchemaV1, SchemaService.SchemaOptions()),
-                                                                                       /*Pair(CashSchemaV3, SchemaService.SchemaOptions()),*/
-                                                                                       Pair(VaultSchemaV1, SchemaService.SchemaOptions(tablePrefix = "")))
+    // For example, cash is used by the vault for coin selection (but will be extracted as a standalone CorDapp in future)
+    val whitelistedSchemas: Map<MappedSchema, SchemaService.SchemaOptions> =
+            mapOf(Pair(CashSchemaV1, SchemaService.SchemaOptions()),
+                  Pair(CommonSchemaV1, SchemaService.SchemaOptions()),
+                  Pair(VaultSchemaV1, SchemaService.SchemaOptions(tablePrefix = "")))
+
+    override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = whitelistedSchemas.plus(customSchemas.map {
+        mappedSchema -> Pair(mappedSchema, SchemaService.SchemaOptions())
+    })
 
     // Currently returns all schemas supported by the state, with no filtering or enrichment.
     override fun selectSchemas(state: ContractState): Iterable<MappedSchema> {
@@ -41,6 +45,7 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
             schemas += state.supportedSchemas()
         if (state is LinearState)
             schemas += VaultSchemaV1   // VaultLinearStates
+        // TODO: DealState to be deprecated (collapsed into LinearState)
         if (state is DealState)
             schemas += VaultSchemaV1   // VaultLinearStates
         if (state is FungibleAsset<*>)
@@ -60,4 +65,5 @@ class NodeSchemaService : SchemaService, SingletonSerializeAsToken() {
             return VaultSchemaV1.VaultFungibleStates(state.owner, state.exitKeys, state.amount.quantity, state.amount.token.issuer.party, state.amount.token.issuer.reference)
         return (state as QueryableState).generateMappedObject(schema)
     }
+
 }
