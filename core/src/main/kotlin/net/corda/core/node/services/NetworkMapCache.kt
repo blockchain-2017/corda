@@ -65,10 +65,14 @@ interface NetworkMapCache {
     fun getRecommended(type: ServiceType, contract: Contract, vararg party: Party): NodeInfo? = getNodesWithService(type).firstOrNull()
 
     /**
-     * Look up the node info for a specific party. Will attempt to de-anonymise the party if applicable.
+     * Look up the node info for a specific party. Will attempt to de-anonymise the party if applicable; if the party
+     * is anonymised and the well known party cannot be resolved, it is impossible ot identify the node and therefore this
+     * returns null.
      *
-     * @param services service hub for access to the identity service for deanonymisation
-     * @param party party to retrieve node information for
+     * @param services service hub for access to the identity service for deanonymisation.
+     * @param party party to retrieve node information for.
+     * @return the node for the identity, or null if the node could not be found. This does not necessarily mean there is
+     * no node for the party, only that this cache is unaware of it.
      */
     fun getNodeByLegalIdentity(services: ServiceHub, party: AbstractParty): NodeInfo?
 

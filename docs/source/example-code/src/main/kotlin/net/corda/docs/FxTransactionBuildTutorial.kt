@@ -48,8 +48,7 @@ private fun gatherOurInputs(serviceHub: ServiceHub,
     val suitableCashStates = cashStates.filter {
         val state = it.state.data
         // TODO: We may want to have the list of our states pre-cached somewhere for performance
-        (state.owner.owningKey in ourKeys)
-                && (state.amount.token == amountRequired.token)
+        (state.owner.owningKey in ourKeys) && (state.amount.token == amountRequired.token)
     }
     require(!suitableCashStates.isEmpty()) { "Insufficient funds" }
     var remaining = amountRequired.quantity

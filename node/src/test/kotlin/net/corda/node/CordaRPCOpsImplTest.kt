@@ -7,6 +7,7 @@ import net.corda.core.crypto.isFulfilledBy
 import net.corda.core.crypto.keys
 import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.StateMachineRunId
+import net.corda.core.getOrThrow
 import net.corda.core.messaging.StateMachineUpdate
 import net.corda.core.messaging.startFlow
 import net.corda.core.node.services.ServiceInfo
@@ -86,26 +87,34 @@ class CordaRPCOpsImplTest {
 
         // Tell the monitoring service node to issue some cash
         val recipient = aliceNode.info.legalIdentity
-        rpc.startFlow(::CashIssueFlow, Amount(quantity, GBP), ref, recipient, notaryNode.info.notaryIdentity)
+        val result = rpc.startFlow(::CashIssueFlow, Amount(quantity, GBP), ref, recipient, notaryNode.info.notaryIdentity)
         mockNet.runNetwork()
 
-        val expectedState = Cash.State(Amount(quantity,
-                Issued(aliceNode.info.legalIdentity.ref(ref), GBP)),
-                recipient)
-
         var issueSmId: StateMachineRunId? = null
+        var txFlowSmId: StateMachineRunId? = null
         stateMachineUpdates.expectEvents {
             sequence(
                     // ISSUE
                     expect { add: StateMachineUpdate.Added ->
                         issueSmId = add.id
                     },
+                    expect { add: StateMachineUpdate.Added ->
+                        txFlowSmId = add.id
+                    },
                     expect { remove: StateMachineUpdate.Removed ->
                         require(remove.id == issueSmId)
+                    },
+                    expect { remove: StateMachineUpdate.Removed ->
+                        require(remove.id == txFlowSmId)
                     }
             )
         }
 
+        val (tx, identities) = result.returnValue.getOrThrow()
+
+        val expectedState = Cash.State(Amount(quantity,
+                Issued(aliceNode.info.legalIdentity.ref(ref), GBP)),
+                identities[recipient]!!.identity)
         transactions.expectEvents {
             expect { tx ->
                 assertEquals(expectedState, tx.tx.outputs.single().data)
@@ -122,7 +131,7 @@ class CordaRPCOpsImplTest {
 
     @Test
     fun `issue and move`() {
-        rpc.startFlow(::CashIssueFlow,
+        val result = rpc.startFlow(::CashIssueFlow,
                 Amount(100, USD),
                 OpaqueBytes(ByteArray(1, { 1 })),
                 aliceNode.info.legalIdentity,
@@ -136,19 +145,33 @@ class CordaRPCOpsImplTest {
         mockNet.runNetwork()
 
         var issueSmId: StateMachineRunId? = null
+        var txIssueFlowSmId: StateMachineRunId? = null
+        var txMoveFlowSmId: StateMachineRunId? = null
         var moveSmId: StateMachineRunId? = null
-        stateMachineUpdates.expectEvents {
+        stateMachineUpdates.expectEvents() {
             sequence(
                     // ISSUE
                     expect { add: StateMachineUpdate.Added ->
                         issueSmId = add.id
                     },
+                    expect { add: StateMachineUpdate.Added ->
+                        txIssueFlowSmId = add.id
+                    },
                     expect { remove: StateMachineUpdate.Removed ->
                         require(remove.id == issueSmId)
+                    },
+                    expect { remove: StateMachineUpdate.Removed ->
+                        require(remove.id == txIssueFlowSmId)
                     },
                     // MOVE
                     expect { add: StateMachineUpdate.Added ->
                         moveSmId = add.id
+                    },
+                    expect { add: StateMachineUpdate.Added ->
+                        txMoveFlowSmId = add.id
+                    },
+                    expect { remove: StateMachineUpdate.Removed ->
+                        require(remove.id == txMoveFlowSmId)
                     },
                     expect { remove: StateMachineUpdate.Removed ->
                         require(remove.id == moveSmId)
@@ -156,6 +179,7 @@ class CordaRPCOpsImplTest {
             )
         }
 
+        val (tx, identities) = result.returnValue.getOrThrow()
         transactions.expectEvents {
             sequence(
                     // ISSUE
@@ -174,7 +198,7 @@ class CordaRPCOpsImplTest {
                         require(stx.tx.outputs.size == 1)
                         val signaturePubKeys = stx.sigs.map { it.by }.toSet()
                         // Alice and Notary signed
-                        require(aliceNode.info.legalIdentity.owningKey.isFulfilledBy(signaturePubKeys))
+                        require(identities[aliceNode.info.legalIdentity]!!.identity.owningKey.isFulfilledBy(signaturePubKeys))
                         require(notaryNode.info.notaryIdentity.owningKey.isFulfilledBy(signaturePubKeys))
                     }
             )
