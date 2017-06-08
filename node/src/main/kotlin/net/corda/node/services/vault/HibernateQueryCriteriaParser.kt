@@ -7,6 +7,7 @@ import net.corda.core.crypto.toBase58String
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
+import net.corda.core.node.services.VaultQueryException
 import net.corda.core.node.services.vault.IQueryCriteriaParser
 import net.corda.core.node.services.vault.Operator
 import net.corda.core.node.services.vault.QueryCriteria
@@ -96,7 +97,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         // participants (are associated with all ContractState types but not stored in the Vault States table - should they?)
         criteria.participantIdentities?.let {
-            throw UnsupportedQueryException("Unable to query on contract state participants until identity schemas defined")
+            throw VaultQueryException("Unsupported query: unable to query on contract state participants until identity schemas defined")
         }
 
         return predicateSet
@@ -112,7 +113,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                     Operator.LESS_THAN -> criteriaBuilder.lessThan(attribute, value[0])
                     Operator.LESS_THAN_OR_EQUAL -> criteriaBuilder.lessThanOrEqualTo(attribute, value[0])
                     Operator.BETWEEN -> criteriaBuilder.between(attribute, value[0],value[1])
-                    else -> throw InvalidQueryOperatorException(operator)
+                    else -> throw VaultQueryException("Invalid query operator: $operator.")
                 }
         return predicate
     }
@@ -290,7 +291,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                         val multiValue = value as Collection<T>
                         criteriaBuilder.between(attribute, multiValue.first(), multiValue.last())
                     }
-                    else -> throw InvalidQueryOperatorException(operator)
+                    else -> throw VaultQueryException("Invalid query operator: $operator.")
                 }
         return predicate
     }

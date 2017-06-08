@@ -10,6 +10,7 @@ import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.TransactionState
 import net.corda.core.crypto.SecureHash
 import net.corda.core.node.services.Vault
+import net.corda.core.node.services.VaultQueryException
 import net.corda.core.node.services.VaultQueryService
 import net.corda.core.node.services.vault.*
 import net.corda.core.schemas.requery.Requery
@@ -31,7 +32,7 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
     val configuration = RequeryConfiguration(dataSourceProperties, true)
     val session = configuration.sessionForModel(Models.VAULT)
 
-    @Throws(VaultQueryException::class, InvalidQueryCriteriaException::class, InvalidQueryOperatorException::class, UnsupportedQueryException::class)
+    @Throws(VaultQueryException::class)
     override fun <T : ContractState> _queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.Page<T> {
 
         // set defaults: UNCONSUMED, ContractTypes
@@ -148,4 +149,19 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
         }
         return myInterfaces
     }
+
+
 }
+
+/**
+ * Helper method to generate a string formatted list of Composite Keys for Requery Expression clause
+ */
+inline fun <reified T: ContractState> deriveContractTypes(): Set<Class<out ContractState>> = deriveContractTypes(T::class.java)
+
+fun <T: ContractState> deriveContractTypes(contractType: Class<T>?): Set<Class<out ContractState>> {
+    if (contractType == null)
+        return setOf(ContractState::class.java)
+    else
+        return setOf(contractType)
+}
+

@@ -343,10 +343,14 @@ interface VaultQueryService {
      *  3. the [PageSpecification] used in the query
      *  4. a total number of results available (for subsequent paging if necessary)
      *
+     * @throws VaultQueryException if the query cannot be executed for any reason
+     *        (missing criteria or parsing error, invalid operator, unsupported query, underlying database error)
+     *
      * Note: a default [PageSpecification] is applied to the query returning the 1st page (indexed from 0) with up to 200 entries.
      *       It is the responsibility of the Client to request further pages and/or specify a more suitable [PageSpecification].
      * Note2: you can also annotate entity fields with JPA OrderBy annotation to achieve the same effect as explicit sorting
      */
+    @Throws(VaultQueryException::class)
     fun <T : ContractState> _queryBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
                                      paging: PageSpecification = PageSpecification(),
                                      sorting: Sort = Sort(emptySet()),
@@ -358,9 +362,12 @@ interface VaultQueryService {
      * 1) a snapshot as a [Vault.Page] (described previously in [queryBy])
      * 2) an [Observable] of [Vault.Update]
      *
+     * @throws VaultQueryException if the query cannot be executed for any reason
+     *
      * Notes: the snapshot part of the query adheres to the same behaviour as the [queryBy] function.
      *        the [QueryCriteria] applies to both snapshot and deltas (streaming updates).
      */
+    @Throws(VaultQueryException::class)
     fun <T : ContractState> trackBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
                                     paging: PageSpecification = PageSpecification(),
                                     sorting: Sort = Sort(emptySet())): Vault.PageAndUpdates<T>
@@ -397,6 +404,8 @@ inline fun <reified T : ContractState> VaultQueryService.queryBy(criteria: Query
 inline fun <reified T : ContractState> VaultQueryService.queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> {
     return _queryBy(criteria, paging, sorting, T::class.java)
 }
+
+class VaultQueryException(description: String) : FlowException("$description")
 
 /**
  * The KMS is responsible for storing and using private keys to sign things. An implementation of this may, for example,

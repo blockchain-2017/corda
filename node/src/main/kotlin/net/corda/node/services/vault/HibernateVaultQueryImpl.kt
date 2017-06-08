@@ -6,6 +6,7 @@ import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.TransactionState
 import net.corda.core.crypto.SecureHash
 import net.corda.core.node.services.Vault
+import net.corda.core.node.services.VaultQueryException
 import net.corda.core.node.services.VaultQueryService
 import net.corda.core.node.services.vault.MAX_PAGE_SIZE
 import net.corda.core.node.services.vault.PageSpecification

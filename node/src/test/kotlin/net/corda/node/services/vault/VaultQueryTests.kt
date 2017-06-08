@@ -300,7 +300,7 @@ open class VaultQueryTests {
         }
     }
 
-    @Test(expected = UnsupportedQueryException::class)
+    @Test(expected = VaultQueryException::class)
     fun `unconsumed states by participants`() {
         database.transaction {
 

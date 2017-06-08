@@ -1,11 +1,7 @@
 package net.corda.core.node.services.vault
 
-import net.corda.core.contracts.ContractState
-import net.corda.core.contracts.StateRef
 import net.corda.core.schemas.PersistentState
-import net.corda.core.schemas.StatePersistable
 import net.corda.core.serialization.CordaSerializable
-import kotlin.reflect.KProperty1
 
 @CordaSerializable
 enum class Operator {
@@ -67,7 +63,6 @@ class LogicalExpression<L, R>(leftOperand: L,
     }
 }
 
-
 /**
  *  Pagination and Ordering
  *
@@ -124,23 +119,8 @@ data class Sort(val columns: Collection<SortColumn>) {
                           val direction: Sort.Direction = Sort.Direction.ASC,
                           val nullHandling: Sort.NullHandling = NullHandling.NULLS_NONE)
     // TODO: JPA Criteria does not support NULL handling
-    // Change the default when we switch to either Hibernate (native) or Requery which both support NULLS handling in their respective Criteria API's
+    // Change the default if/when we switch Requery which supports NULLS handling in its Query Criteria API
     //  if (direction == Sort.Direction.ASC) Sort.NullHandling.NULLS_LAST else Sort.NullHandling.NULLS_FIRST)
 }
 
-/**
- * Helper method to generate a string formatted list of Composite Keys for Requery Expression clause
- */
-fun stateRefArgs(stateRefs: List<StateRef>): List<List<Any>> {
-    return stateRefs.map { listOf("'${it.txhash}'", it.index) }
-}
-
-inline fun <reified T: ContractState> deriveContractTypes(): Set<Class<out ContractState>> = deriveContractTypes(T::class.java)
-
-fun <T: ContractState> deriveContractTypes(contractType: Class<T>?): Set<Class<out ContractState>> {
-    if (contractType == null)
-        return setOf(ContractState::class.java)
-    else
-        return setOf(contractType)
-}
 

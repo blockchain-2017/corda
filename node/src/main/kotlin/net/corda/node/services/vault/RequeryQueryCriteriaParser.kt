@@ -8,8 +8,10 @@ import io.requery.meta.AttributeDelegate
 import io.requery.meta.Type
 import io.requery.query.*
 import net.corda.core.contracts.ContractState
+import net.corda.core.contracts.StateRef
 import net.corda.core.flows.FlowException
 import net.corda.core.node.services.Vault
+import net.corda.core.node.services.VaultQueryException
 import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.Logical
 import net.corda.core.node.services.vault.Operator
@@ -113,7 +115,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
 
         // participants (are associated with all ContractState types but not stored in the Vault States table - should they?)
         criteria.participantIdentities?.let {
-            throw UnsupportedQueryException("Unable to query on contract state participants until identity schemas defined")
+            throw VaultQueryException("Unsupported query: unable to query on contract state participants until identity schemas defined")
         }
 
         query.where(chainedConditions)
@@ -131,7 +133,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
                 Operator.LESS_THAN -> property.lt(value[0])
                 Operator.LESS_THAN_OR_EQUAL -> property.lte(value[0])
                 Operator.BETWEEN -> property.between(value[0],value[1])
-                else -> throw InvalidQueryOperatorException(operator)
+                else -> throw VaultQueryException("Invalid query operator: $operator.")
             }
         return condition
     }
@@ -168,7 +170,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
 //                })
 
         if (logicalCondition == null)
-            throw InvalidQueryCriteriaException(QueryCriteria.LinearStateQueryCriteria::class.java)
+            throw VaultQueryException("No query criteria specified for ${QueryCriteria.LinearStateQueryCriteria::class.java.simpleName}")
 
         query.where(logicalCondition)
 
@@ -220,7 +222,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
                     Operator.IS_NULL -> queryAttribute.isNull
                     Operator.NOT_NULL -> queryAttribute.notNull()
                     else -> {
-                        throw InvalidQueryOperatorException(logicalExpr!!.operator)
+                        throw VaultQueryException("Invalid query operator: ${logicalExpr?.operator}.")
                     }
                 }
 
@@ -280,7 +282,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
                 entityClasses.addAll(deriveEntities(criteria.b))
             }
             else ->
-                throw InvalidQueryCriteriaException(criteria::class.java)
+                throw VaultQueryException("No query criteria specified for ${criteria::class.java.simpleName}")
         }
 
         return setOf(VaultSchema.VaultStates::class.java).plus(entityClasses).toList()
@@ -293,9 +295,8 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
     override fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
-}
 
-class VaultQueryException(description: String) : FlowException("Vault query: $description.")
-class InvalidQueryCriteriaException(criteriaMissing: Class<out QueryCriteria>) : FlowException("No query criteria specified for ${criteriaMissing.simpleName}.")
-class InvalidQueryOperatorException(operator: Operator) : FlowException("Invalid query operator: $operator.")
-class UnsupportedQueryException(description: String) : FlowException("Unsupported query: $description.")
+    fun stateRefArgs(stateRefs: List<StateRef>): List<List<Any>> {
+        return stateRefs.map { listOf("'${it.txhash}'", it.index) }
+    }
+}
