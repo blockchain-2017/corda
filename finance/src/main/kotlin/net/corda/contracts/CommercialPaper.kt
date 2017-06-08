@@ -103,7 +103,7 @@ class CommercialPaper : Contract {
                 is CommercialPaperSchemaV2 -> CommercialPaperSchemaV2.PersistentCommercialPaperState(
                         _issuerParty = this.issuance.party,
                         _issuerRef = this.issuance.reference.bytes,
-                        _owner = this.owner,
+                        _owner = this.owner.owningKey,
                         maturity = this.maturityDate,
                         _quantity = this.faceValue.quantity,
                         currency = this.faceValue.token.product.currencyCode,

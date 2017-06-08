@@ -4,6 +4,7 @@ import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.crypto.toBase58String
+import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.IQueryCriteriaParser
@@ -144,7 +145,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         // issuer party
         criteria.issuerPartyName?.let {
-            val issuerParties = criteria.issuerPartyName as List<AnonymousParty>
+            val issuerParties = criteria.issuerPartyName as List<AbstractParty>
             val joinFungibleStateToParty = vaultFungibleStates.join<VaultSchemaV1.VaultFungibleStates, CommonSchemaV1.Party>("issuerParty")
             val dealPartyKeys = issuerParties.map { it.owningKey.toBase58String() }
             predicateSet.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))
@@ -194,7 +195,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         // deal parties
         criteria.dealParties?.let {
-            val dealParties = criteria.dealParties as List<AnonymousParty>
+            val dealParties = criteria.dealParties as List<AbstractParty>
             val joinLinearStateToParty = vaultLinearStates.join<VaultSchemaV1.VaultLinearStates, CommonSchemaV1.Party>("dealParties")
             val dealPartyKeys = dealParties.map { it.owningKey.toBase58String() }
             predicateSet.add(criteriaBuilder.equal(joinLinearStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))

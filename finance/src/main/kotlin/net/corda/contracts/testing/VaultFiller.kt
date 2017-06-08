@@ -7,7 +7,6 @@ import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.DUMMY_CASH_ISSUER
 import net.corda.contracts.asset.DUMMY_CASH_ISSUER_KEY
 import net.corda.core.contracts.*
-import net.corda.core.crypto.AnonymousParty
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.Party
@@ -15,10 +14,9 @@ import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.Vault
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
-import net.corda.core.utilities.CHARLIE_KEY
+import net.corda.core.utilities.CHARLIE
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
-import sun.security.x509.X500Name
 import java.security.KeyPair
 import java.security.PublicKey
 import java.util.*
@@ -32,7 +30,7 @@ fun ServiceHub.fillWithSomeTestDeals(dealIds: List<String>,
     val transactions: List<SignedTransaction> = dealIds.map {
         // Issue a deal state
         val dummyIssue = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-            addOutputState(DummyDealContract.State(ref = it, participants = participants.plus(recipient)))
+            addOutputState(DummyDealContract.State(ref = it, parties = participants.plus(recipient) ,participants = participants.plus(recipient)))
             signWith(DUMMY_NOTARY_KEY)
         }
         return@map signInitialTransaction(dummyIssue)
@@ -194,7 +192,7 @@ fun ServiceHub.consumeLinearStates(linearStates: List<StateAndRef<LinearState>>)
 fun ServiceHub.evolveLinearStates(linearStates: List<StateAndRef<LinearState>>) = consumeAndProduce(linearStates)
 fun ServiceHub.evolveLinearState(linearState: StateAndRef<LinearState>) : StateAndRef<LinearState> = consumeAndProduce(linearState)
 
-fun ServiceHub.consumeCash(amount: Amount<Currency>, to: PublicKey = CHARLIE_KEY.public) {
+fun ServiceHub.consumeCash(amount: Amount<Currency>, to: Party = CHARLIE) {
 
     // A tx that spends our money.
     val spendTX = TransactionType.General.Builder(DUMMY_NOTARY).apply {

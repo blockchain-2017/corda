@@ -77,7 +77,7 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
              *  Represents a [LinearState] [UniqueIdentifier]
              */
             @Column(name = "external_id")
-//            var externalId: String?,     // Generics prevent using a Nullable type
+//            var externalId: String?,     // TODO: Generics prevent using a Nullable type
             var externalId: String,
 
             @Column(name = "uuid", nullable = false)
@@ -95,7 +95,7 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
 
     ) : PersistentState() {
         constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId ?: "", uuid = uid.id, dealReference = "", dealParties = setOf())
-        constructor(uid: UniqueIdentifier, _dealReference: String, _dealParties: List<AnonymousParty>) : this(externalId = uid.externalId ?: "", uuid = uid.id,
+        constructor(uid: UniqueIdentifier, _dealReference: String, _dealParties: List<AbstractParty>) : this(externalId = uid.externalId ?: "", uuid = uid.id,
                 dealReference = _dealReference, dealParties = _dealParties.map{ CommonSchemaV1.Party(it) }.toSet() )
     }
 
@@ -135,8 +135,8 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             var issuerRef: ByteArray
 
     ) : PersistentState() {
-        constructor(_owner: PublicKey, _exitKeys: Collection<PublicKey>, _quantity: Long, _issuerParty: AnonymousParty, _issuerRef: OpaqueBytes) :
-                this(owner = CommonSchemaV1.Party(AnonymousParty(_owner)),
+        constructor(_owner: AbstractParty, _exitKeys: Collection<PublicKey>, _quantity: Long, _issuerParty: AbstractParty, _issuerRef: OpaqueBytes) :
+                this(owner = CommonSchemaV1.Party(_owner),
                      exitKeys = _exitKeys.map { CommonSchemaV1.Party(AnonymousParty(it)) }.toSet(),
                      quantity = _quantity,
                      issuerParty = CommonSchemaV1.Party(_issuerParty),

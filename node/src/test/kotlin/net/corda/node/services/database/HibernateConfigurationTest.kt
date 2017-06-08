@@ -13,6 +13,7 @@ import net.corda.core.schemas.PersistentStateRef
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.storageKryo
 import net.corda.core.transactions.SignedTransaction
+import net.corda.core.utilities.ALICE
 import net.corda.core.utilities.BOB
 import net.corda.core.utilities.BOB_KEY
 import net.corda.core.utilities.DUMMY_NOTARY
@@ -467,9 +468,9 @@ class HibernateConfigurationTest {
     fun `query fungible states by owner party`() {
 
         database.transaction {
-            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L), ownedBy = (ALICE_PUBKEY))
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L), ownedBy = ALICE)
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L),
-                    issuedBy = BOB.ref(0), issuerKey = BOB_KEY, ownedBy = (BOB_PUBKEY))
+                    issuedBy = BOB.ref(0), issuerKey = BOB_KEY, ownedBy = (BOB))
         }
 
         val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CommonSchemaV1, CashSchemaV3)
@@ -499,7 +500,7 @@ class HibernateConfigurationTest {
         queryResults.forEach {
             val contractState = it.contractState.deserialize<TransactionState<ContractState>>(storageKryo())
             val cashState = contractState.data as Cash.State
-            println("${it.stateRef} with owner: ${cashState.owner.toBase58String()}") }
+            println("${it.stateRef} with owner: ${cashState.owner.owningKey.toBase58String()}") }
 
         assertThat(queryResults).hasSize(12)
     }
@@ -533,9 +534,9 @@ class HibernateConfigurationTest {
         val cashStates =
                 database.transaction {
                     services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L),
-                            issuedBy = BOB.ref(0), issuerKey = BOB_KEY, ownedBy = (BOB_PUBKEY))
+                            issuedBy = BOB.ref(0), issuerKey = BOB_KEY, ownedBy = BOB)
                     services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L),
-                            ownedBy = (ALICE_PUBKEY))
+                            ownedBy = (ALICE))
                 }
         val firstCashState = cashStates.states.first()
 
@@ -554,7 +555,7 @@ class HibernateConfigurationTest {
         val cashStatesSchema = criteriaQuery.from(CashSchemaV3.PersistentCashState::class.java)
 
         val joinCashToParty = cashStatesSchema.join<CashSchemaV3.PersistentCashState, CommonSchemaV1.Party>("participants")
-        val queryParticipantKeys = firstCashState.state.data.participants.map { it.toBase58String() }
+        val queryParticipantKeys = firstCashState.state.data.participants.map { it.owningKey.toBase58String() }
         criteriaQuery.where(criteriaBuilder.equal(joinCashToParty.get<CommonSchemaV1.Party>("key"), queryParticipantKeys))
 
         val joinVaultStatesToCash = criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), cashStatesSchema.get<PersistentStateRef>("stateRef"))
@@ -566,7 +567,7 @@ class HibernateConfigurationTest {
         queryResults.forEach {
             val contractState = it.contractState.deserialize<TransactionState<ContractState>>(storageKryo())
             val cashState = contractState.data as Cash.State
-            println("${it.stateRef} with owner ${cashState.owner.toBase58String()} and participants ${cashState.participants.map { it.toBase58String() }}")
+            println("${it.stateRef} with owner ${cashState.owner.owningKey.toBase58String()} and participants ${cashState.participants.map { it.owningKey.toBase58String() }}")
         }
 
         assertThat(queryResults).hasSize(12)

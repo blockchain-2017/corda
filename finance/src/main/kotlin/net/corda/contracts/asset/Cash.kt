@@ -119,15 +119,15 @@ class Cash : OnLedgerAsset<Currency, Cash.Commands, Cash.State>() {
                         issuerRef = this.amount.token.issuer.reference.bytes
                 )
                 is CashSchemaV2 -> CashSchemaV2.PersistentCashState(
-                        _owner = this.owner,
+                        _owner = this.owner.owningKey,
                         _quantity = this.amount.quantity,
                         currency = this.amount.token.product.currencyCode,
                         _issuerParty = this.amount.token.issuer.party,
                         _issuerRef = this.amount.token.issuer.reference.bytes
                 )
                 is CashSchemaV3 -> CashSchemaV3.PersistentCashState(
-                        _participants = this.participants.map { AnonymousParty(it) }.toSet(),
-                        _owner = AnonymousParty(this.owner),
+                        _participants = this.participants.toSet(),
+                        _owner = this.owner,
                         _quantity = this.amount.quantity,
                         _currency = this.amount.token.product.currencyCode,
                         _issuerParty = this.amount.token.issuer.party.owningKey.toBase58String(),

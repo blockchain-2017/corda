@@ -82,13 +82,13 @@ class RequeryQueryCriteriaParserTest {
         }
 
         database.transaction {
-            cashStates = services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L), ownedBy = MINI_CORP_PUBKEY).states.map { it.ref }
+            cashStates = services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L), ownedBy = MINI_CORP).states.map { it.ref }
                     .plus(services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (DUMMY_CASH_ISSUER)).states.map { it.ref })
                     .plus(services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (BOC.ref(1)), issuerKey = BOC_KEY, ref = OpaqueBytes.of(1)).states.map { it.ref })
-            linearStates = services.fillWithSomeTestLinearStates(1, linearId1, participants = listOf(MEGA_CORP_PUBKEY, MINI_CORP_PUBKEY)).states.toList()
-                    .plus(services.fillWithSomeTestLinearStates(2, linearId2, participants = listOf(MEGA_CORP_PUBKEY, MINI_CORP_PUBKEY)).states.toList())
-            dealStates = services.fillWithSomeTestDeals(listOf(DEAL_REF1), parties = listOf(MEGA_CORP.toAnonymous(), BIG_CORP.toAnonymous())).states.toList()
-                   .plus(services.fillWithSomeTestDeals(listOf(DEAL_REF2, DEAL_REF3), parties = listOf(BIG_CORP.toAnonymous(), MINI_CORP.toAnonymous())).states)
+            linearStates = services.fillWithSomeTestLinearStates(1, linearId1, participants = listOf(MEGA_CORP, MINI_CORP)).states.toList()
+                    .plus(services.fillWithSomeTestLinearStates(2, linearId2, participants = listOf(MEGA_CORP, MINI_CORP)).states.toList())
+            dealStates = services.fillWithSomeTestDeals(listOf(DEAL_REF1), participants = listOf(MEGA_CORP, BIG_CORP)).states.toList()
+                   .plus(services.fillWithSomeTestDeals(listOf(DEAL_REF2, DEAL_REF3), participants = listOf(BIG_CORP, MINI_CORP)).states)
         }
 
         val requeryConfig = RequeryConfiguration(dataSourceProps, true)
@@ -207,7 +207,7 @@ class RequeryQueryCriteriaParserTest {
             val criteria2 = QueryCriteria.LinearStateQueryCriteria(dealRef = dealRefs)
             criteriaParse.parse(criteria2)
 
-            val dealParties = listOf(MEGA_CORP.toAnonymous(), MINI_CORP.toAnonymous())
+            val dealParties = listOf(MEGA_CORP, MINI_CORP)
             val criteria3 = QueryCriteria.LinearStateQueryCriteria(dealParties = dealParties)
             criteriaParse.parse(criteria3)
 

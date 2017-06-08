@@ -1,27 +1,25 @@
 package net.corda.node.services.vault;
 
 import com.google.common.collect.ImmutableSet;
-import jdk.internal.dynalink.support.*;
 import kotlin.Pair;
-import net.corda.contracts.DealState;
 import net.corda.contracts.asset.Cash;
 import net.corda.core.contracts.*;
 import net.corda.core.crypto.SecureHash;
-import net.corda.core.identity.*;
+import net.corda.core.identity.AbstractParty;
 import net.corda.core.node.services.Vault;
+import net.corda.core.node.services.VaultQueryService;
 import net.corda.core.node.services.VaultService;
-import net.corda.core.node.services.vault.PageSpecification;
-import net.corda.core.node.services.vault.QueryCriteria;
+import net.corda.core.node.services.vault.*;
 import net.corda.core.node.services.vault.QueryCriteria.LinearStateQueryCriteria;
+import net.corda.core.node.services.vault.QueryCriteria.VaultCustomQueryCriteria;
 import net.corda.core.node.services.vault.QueryCriteria.VaultQueryCriteria;
-import net.corda.core.node.services.vault.Sort;
 import net.corda.core.serialization.OpaqueBytes;
 import net.corda.core.transactions.SignedTransaction;
 import net.corda.core.transactions.WireTransaction;
-import net.corda.node.services.database.*;
-import net.corda.node.services.schema.VaultLinearStateEntity;
-import net.corda.node.services.vault.schemas.jpa.*;
-import net.corda.schemas.*;
+import net.corda.node.services.database.HibernateConfiguration;
+import net.corda.node.services.schema.NodeSchemaService;
+import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1;
+import net.corda.schemas.CashSchemaV1;
 import net.corda.testing.node.MockServices;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.exposed.sql.Database;
@@ -33,11 +31,8 @@ import rx.Observable;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.lang.invoke.*;
-import java.lang.reflect.*;
+import java.lang.reflect.Field;
 import java.util.*;
-import java.util.function.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -160,7 +155,7 @@ public class VaultQueryJavaTests {
             QueryCriteria vaultCriteria = new VaultQueryCriteria(status, contractStateTypes);
 
             List<UniqueIdentifier> linearIds = Arrays.asList(uid);
-            List<AnonymousParty> dealParties = Arrays.asList(getMEGA_CORP().toAnonymous());
+            List<AbstractParty> dealParties = Arrays.asList(getMEGA_CORP());
             QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(linearIds, dealIds, dealParties);
 
             QueryCriteria compositeCriteria = and(dealCriteriaAll, vaultCriteria);
@@ -275,7 +270,7 @@ public class VaultQueryJavaTests {
             QueryCriteria vaultCriteria = new VaultQueryCriteria(Vault.StateStatus.UNCONSUMED, contractStateTypes);
 
             List<UniqueIdentifier> linearIds = Arrays.asList(uid);
-            List<AnonymousParty> dealParty = Arrays.asList(getMEGA_CORP().toAnonymous());
+            List<AbstractParty> dealParty = Arrays.asList(getMEGA_CORP());
             QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(linearIds, dealIds, dealParty);
 
             QueryCriteria compositeCriteria = and(dealCriteriaAll, vaultCriteria);
