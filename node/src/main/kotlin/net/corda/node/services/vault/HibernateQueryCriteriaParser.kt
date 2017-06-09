@@ -7,10 +7,7 @@ import net.corda.core.crypto.toBase58String
 import net.corda.core.identity.AbstractParty
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultQueryException
-import net.corda.core.node.services.vault.IQueryCriteriaParser
-import net.corda.core.node.services.vault.Operator
-import net.corda.core.node.services.vault.QueryCriteria
-import net.corda.core.node.services.vault.Sort
+import net.corda.core.node.services.vault.*
 import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.PersistentStateRef
 import net.corda.core.serialization.OpaqueBytes
@@ -230,9 +227,59 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
             joinPredicates.add(joinPredicate)
 
             val operator = criteria.indexExpression.operator
-            val value = criteria.indexExpression.rightOperand // TODO: Java Test failing here (.toString().javaClass)
+            if (criteria.indexExpression is UnaryLogicalExpression) {
+                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName))))
+            }
+            else if (criteria.indexExpression is CollectionExpression) {
+                val value = criteria.indexExpression.rightOperand as Collection<R>
+                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
+            }
+            else {
+                val value = criteria.indexExpression.rightOperand   // TODO: Java Test failing here (.toString().javaClass)
+                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
+            }
+        }
+        catch (e: Exception) {
+            e?.message?.let { message ->
+                if (message.contains("Not an entity"))
+                    throw VaultQueryException("""
+                    Please register the entity '${entityClass.name.substringBefore('$')}' class in your CorDapp's CordaPluginRegistry configuration (requiredSchemas attribute)
+                    and ensure you have declared (in supportedSchemas()) and mapped (in generateMappedObject()) the schema in the associated contract state's QueryableState interface implementation.
+                    See https://docs.corda.net/persistence.html?highlight=persistence for more information""")
+            }
+            throw VaultQueryException("Parsing error: ${e.message}")
+        }
 
-            predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
+        return predicateSet
+    }
+
+    override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteriaNullable<L, R>): Collection<Predicate> {
+
+        log.trace { "Parsing VaultCustomQueryCriteria: $criteria" }
+
+        var predicateSet = mutableSetOf<Predicate>()
+
+        val (entityClass, attributeName) = resolveIt(criteria.indexExpression.leftOperand)
+
+        try {
+            val entityRoot = criteriaQuery.from(entityClass)
+            rootEntities.putIfAbsent(entityClass as Class<PersistentState>, entityRoot)
+            criteriaQuery.select(vaultStates)
+            val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
+            joinPredicates.add(joinPredicate)
+
+            val operator = criteria.indexExpression.operator
+            if (criteria.indexExpression is UnaryLogicalExpression) {
+                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName))))
+            }
+            else if (criteria.indexExpression is CollectionExpression) {
+                val values = criteria.indexExpression.rightOperand as Collection<R>
+                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), values)))
+            }
+            else {
+                val value = criteria.indexExpression.rightOperand   // TODO: Java Test failing here (.toString().javaClass)
+                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
+            }
         }
         catch (e: Exception) {
             e?.message?.let { message ->
@@ -292,6 +339,27 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         return predicateSet
     }
 
+    private fun <T : Comparable<T>> parseGenericOperator(operator: Operator, attribute: Path<out T>?, values: Collection<T>): Predicate? {
+
+        check(values.size > 0) { "$operator expects at least one argument value [$values]"}
+
+        val predicate =
+                when (operator) {
+                    Operator.BETWEEN -> {
+                            check(values.size == 2) { "$operator expects two argument values [$values]"}
+                            criteriaBuilder.between(attribute, values.first(), values.last())
+                        }
+                    Operator.IN -> {
+                        criteriaBuilder.`in`(attribute as Expression<in T>).value(values)
+                    }
+                    Operator.NOT_IN -> {
+                        !criteriaBuilder.`in`(attribute as Expression<in T>).value(values)
+                    }
+                    else -> throw VaultQueryException("Invalid query operator: $operator.")
+                }
+        return predicate
+    }
+
     private fun <T : Comparable<T>> parseGenericOperator(operator: Operator, attribute: Path<out T>?, value: T): Predicate? {
 
         val predicate =
@@ -302,27 +370,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                     Operator.GREATER_THAN_OR_EQUAL -> criteriaBuilder.greaterThanOrEqualTo(attribute, value)
                     Operator.LESS_THAN -> criteriaBuilder.lessThan(attribute, value)
                     Operator.LESS_THAN_OR_EQUAL -> criteriaBuilder.lessThanOrEqualTo(attribute, value)
-                    Operator.BETWEEN -> {
-                        try {
-                            val valuePair = value as Pair<T, T>
-                            criteriaBuilder.between(attribute, valuePair.first, valuePair.second)
-                        }
-                        catch (e: Exception) {
-                            throw VaultQueryException("operator $operator expects a Pair of values ($value)")
-                        }
-                    }
-                    Operator.IN -> {
-                        if (value is Collection<*>)
-                            criteriaBuilder.`in`(value as Expression<out T>)
-                        else
-                            throw VaultQueryException("operator $operator expects a collection of values ($value)")
-                    }
-                    Operator.NOT_IN -> {
-                        if (value is Collection<*>)
-                            !criteriaBuilder.`in`(value as Expression<out T>)
-                        else
-                            throw VaultQueryException("operator $operator expects a collection of values ($value)")
-                    }
                     Operator.LIKE -> {
                         if (value is String)
                             criteriaBuilder.like(attribute as Expression<String>, value)
@@ -335,6 +382,14 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                         else
                             throw VaultQueryException("operator $operator expects a SQL LIKE wildcarded expression (using '%' '_') as a String ($value)")
                     }
+                    else -> throw VaultQueryException("Invalid query operator: $operator.")
+                }
+        return predicate
+    }
+
+    private fun parseGenericOperator(operator: Operator, attribute: Path<out Any>?): Predicate? {
+        val predicate =
+                when (operator) {
                     Operator.IS_NULL -> criteriaBuilder.isNull(attribute)
                     Operator.NOT_NULL -> criteriaBuilder.isNotNull(attribute)
                     else -> throw VaultQueryException("Invalid query operator: $operator.")

@@ -438,11 +438,11 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
             services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
 
-//            val penniesRange = Pair(5L, 15L)
-//            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.BETWEEN, penniesRange)
-//            val criteria = VaultCustomQueryCriteria(logicalExpression)
-//            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
-//            assertThat(results.states).hasSize(1)
+            val penniesRange = listOf(500L, 1500L)
+            val logicalExpression = CollectionExpression(CashSchemaV1.PersistentCashState::pennies, Operator.BETWEEN, penniesRange)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(1)
         }
     }
 
@@ -454,7 +454,7 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
             services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
 
-            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.BETWEEN, 1000L)
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.BETWEEN, 100L)
             val criteria = VaultCustomQueryCriteria(logicalExpression)
             val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
             assertThat(results.states).hasSize(1)
@@ -469,8 +469,8 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
             services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
 
-//            val currencies = listOf(CHF.currencyCode, GBP.currencyCode)
-            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.IN, "GBP")
+            val currencies = listOf(CHF.currencyCode, GBP.currencyCode)
+            val logicalExpression = CollectionExpression(CashSchemaV1.PersistentCashState::currency, Operator.IN, currencies)
             val criteria = VaultCustomQueryCriteria(logicalExpression)
             val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
             assertThat(results.states).hasSize(2)
@@ -485,8 +485,8 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
             services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
 
-//            val currencies = listOf(CHF.currencyCode, GBP.currencyCode)
-            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.NOT_IN, "GBP")
+            val currencies = listOf(CHF.currencyCode, GBP.currencyCode)
+            val logicalExpression = CollectionExpression(CashSchemaV1.PersistentCashState::currency, Operator.NOT_IN, currencies)
             val criteria = VaultCustomQueryCriteria(logicalExpression)
             val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
             assertThat(results.states).hasSize(1)
@@ -545,11 +545,10 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
             services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
 
-//            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::issuerRef, Operator.IS_NULL, ByteArray(1))
-            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::issuerParty, Operator.IS_NULL, "")
+            val logicalExpression = UnaryLogicalExpression(CashSchemaV1.PersistentCashState::issuerParty, Operator.IS_NULL)
             val criteria = VaultCustomQueryCriteria(logicalExpression)
             val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
-            assertThat(results.states).hasSize(3)
+            assertThat(results.states).hasSize(0)
         }
     }
 
@@ -561,8 +560,7 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
             services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
 
-//            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::issuerRef, Operator.NOT_NULL)
-            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::issuerParty, Operator.NOT_NULL, "")
+            val logicalExpression = UnaryLogicalExpression(CashSchemaV1.PersistentCashState::issuerParty, Operator.NOT_NULL)
             val criteria = VaultCustomQueryCriteria(logicalExpression)
             val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
             assertThat(results.states).hasSize(3)
@@ -1368,7 +1366,7 @@ open class VaultQueryTests {
             // 2 unconsumed states with same external ID
 
             val externalIdCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.EQUAL, "TEST2")
-            val externalIdCustomCriteria = VaultCustomQueryCriteria(externalIdCondition)
+            val externalIdCustomCriteria = VaultCustomQueryCriteriaNullable(externalIdCondition)
 
             val results = vaultQuerySvc.queryBy<LinearState>(externalIdCustomCriteria)
 
@@ -1392,7 +1390,7 @@ open class VaultQueryTests {
             // 2 unconsumed states with same external ID
 
             val linearIdCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.EQUAL, "TEST2")
-            val customCriteria = VaultCustomQueryCriteria(linearIdCondition)
+            val customCriteria = VaultCustomQueryCriteriaNullable(linearIdCondition)
 
             val recordedBetweenExpression = LogicalExpression(TimeInstantType.RECORDED, Operator.BETWEEN, arrayOf(start, end))
             val basicCriteria = VaultQueryCriteria(timeCondition = recordedBetweenExpression)
@@ -1416,13 +1414,51 @@ open class VaultQueryTests {
             // 2 unconsumed states with same external ID
 
             val externalIdCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.EQUAL, "TEST2")
-            val externalIdCustomCriteria = VaultCustomQueryCriteria(externalIdCondition)
+            val externalIdCustomCriteria = VaultCustomQueryCriteriaNullable(externalIdCondition)
 
             val uuidCondition = LogicalExpression(VaultSchemaV1.VaultLinearStates::uuid, Operator.EQUAL, uuid)
             val uuidCustomCriteria = VaultCustomQueryCriteria(uuidCondition)
 
             val criteria = externalIdCustomCriteria.or(uuidCustomCriteria)
             val results = vaultQuerySvc.queryBy<LinearState>(criteria)
+
+            assertThat(results.states).hasSize(2)
+        }
+    }
+
+    @Test
+    fun `unconsumed linear heads where external id is null`() {
+        database.transaction {
+
+            services.fillWithSomeTestLinearStates(1, "TEST1")
+            services.fillWithSomeTestLinearStates(1)
+            services.fillWithSomeTestLinearStates(1, "TEST3")
+
+            // 3 unconsumed states (one without an external ID)
+
+            val externalIdCondition = UnaryLogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.IS_NULL)
+            val externalIdCustomCriteria = VaultCustomQueryCriteriaNullable(externalIdCondition)
+
+            val results = vaultQuerySvc.queryBy<LinearState>(externalIdCustomCriteria)
+
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    @Test
+    fun `unconsumed linear heads where external id is not null`() {
+        database.transaction {
+
+            services.fillWithSomeTestLinearStates(1, "TEST1")
+            services.fillWithSomeTestLinearStates(1)
+            services.fillWithSomeTestLinearStates(1, "TEST3")
+
+            // 3 unconsumed states (two with an external ID)
+
+            val externalIdCondition = UnaryLogicalExpression(VaultSchemaV1.VaultLinearStates::externalId, Operator.NOT_NULL)
+            val externalIdCustomCriteria = VaultCustomQueryCriteriaNullable(externalIdCondition)
+
+            val results = vaultQuerySvc.queryBy<LinearState>(externalIdCustomCriteria)
 
             assertThat(results.states).hasSize(2)
         }

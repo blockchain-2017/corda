@@ -93,6 +93,14 @@ sealed class QueryCriteria {
             return parser.parseCriteria(this)
         }
     }
+
+    data class VaultCustomQueryCriteriaNullable<L: Any, R : Comparable<R>>(val indexExpression: Logical<KMutableProperty1<L,R?>, out R>) : QueryCriteria() {
+
+        override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
+            return parser.parseCriteria(this)
+        }
+    }
+
     // enable composition of [QueryCriteria]
     data class AndComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
 
@@ -119,6 +127,7 @@ interface IQueryCriteriaParser {
     fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): Collection<Predicate>
     fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): Collection<Predicate>
     fun <L: Any,R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): Collection<Predicate>
+    fun <L: Any,R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteriaNullable<L, R>): Collection<Predicate>
     fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): Collection<Predicate>
     fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
     fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>

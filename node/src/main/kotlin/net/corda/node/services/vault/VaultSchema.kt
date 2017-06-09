@@ -77,8 +77,8 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
              *  Represents a [LinearState] [UniqueIdentifier]
              */
             @Column(name = "external_id")
-//            var externalId: String?,     // TODO: Generics prevent using a Nullable type
-            var externalId: String,
+            var externalId: String?,     // TODO: Generics prevent using a Nullable type
+//            var externalId: String,
 
             @Column(name = "uuid", nullable = false)
             var uuid: UUID,
@@ -94,7 +94,7 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             var dealParties: Set<CommonSchemaV1.Party>
 
     ) : PersistentState() {
-        constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId ?: "", uuid = uid.id, dealReference = "", dealParties = setOf())
+        constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId, uuid = uid.id, dealReference = "", dealParties = setOf())
         constructor(uid: UniqueIdentifier, _dealReference: String, _dealParties: List<AbstractParty>) : this(externalId = uid.externalId ?: "", uuid = uid.id,
                 dealReference = _dealReference, dealParties = _dealParties.map{ CommonSchemaV1.Party(it) }.toSet() )
     }

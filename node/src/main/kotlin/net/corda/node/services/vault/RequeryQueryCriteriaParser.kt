@@ -9,7 +9,6 @@ import io.requery.meta.Type
 import io.requery.query.*
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateRef
-import net.corda.core.flows.FlowException
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultQueryException
 import net.corda.core.node.services.vault.*
@@ -27,6 +26,9 @@ import kotlin.reflect.KProperty1
 import kotlin.reflect.jvm.javaMethod
 
 class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<String>>, val query: Selection<out Result<VaultSchema.VaultStates>>) : IQueryCriteriaParser {
+    override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteriaNullable<L, R>): Collection<Predicate> {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
 
     companion object {
         val log = loggerFor<RequeryQueryCriteriaParser>()

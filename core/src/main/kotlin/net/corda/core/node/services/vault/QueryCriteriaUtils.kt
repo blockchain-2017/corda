@@ -1,5 +1,6 @@
 package net.corda.core.node.services.vault
 
+import net.corda.core.node.services.VaultQueryException
 import net.corda.core.schemas.PersistentState
 import net.corda.core.serialization.CordaSerializable
 
@@ -36,6 +37,26 @@ interface AndOr<out Q> {
 @CordaSerializable
 sealed class Logical<L, R> : Condition<L, R>, AndOr<L>
 
+class UnaryLogicalExpression<L>(leftOperand: L,
+                              operator: Operator) : Logical<L, Nothing>() {
+    init {
+        check(operator in setOf(Operator.NOT_NULL, Operator.IS_NULL),
+                { "Must use a unary operator (${Operator.IS_NULL}, ${Operator.NOT_NULL})"} )
+    }
+
+    override val operator: Operator = operator
+    override val rightOperand: Nothing get() = throw VaultQueryException("Unexpected right operand")
+    override val leftOperand: L = leftOperand
+
+    override fun <V> and(condition: Condition<V, *>): Logical<*, *> {
+        return LogicalExpression(this, Operator.AND, condition)
+    }
+
+    override fun <V> or(condition: Condition<V, *>): Logical<*, *> {
+        return LogicalExpression(this, Operator.OR, condition)
+    }
+}
+
 class LogicalExpression<L, R>(leftOperand: L,
                               operator: Operator,
                               rightOperand: R?) : Logical<L, R>() {
@@ -48,6 +69,27 @@ class LogicalExpression<L, R>(leftOperand: L,
             check(operator !in setOf(Operator.NOT_NULL, Operator.IS_NULL),
                     { "Cannot use a unary operator (${Operator.IS_NULL}, ${Operator.NOT_NULL}) if right operand is not null"} )
         }
+    }
+
+    override val operator: Operator = operator
+    override val rightOperand: R = rightOperand as R
+    override val leftOperand: L = leftOperand
+
+    override fun <V> and(condition: Condition<V, *>): Logical<*, *> {
+        return LogicalExpression(this, Operator.AND, condition)
+    }
+
+    override fun <V> or(condition: Condition<V, *>): Logical<*, *> {
+        return LogicalExpression(this, Operator.OR, condition)
+    }
+}
+
+class CollectionExpression<L, R>(leftOperand: L,
+                              operator: Operator,
+                              rightOperand: Collection<R>) : Logical<L, R>() {
+    init {
+        check(operator in setOf(Operator.IN, Operator.NOT_IN, Operator.BETWEEN),
+                { "Must use a one of the operators (${Operator.IN}, ${Operator.NOT_IN}, ${Operator.BETWEEN})"} )
     }
 
     override val operator: Operator = operator
