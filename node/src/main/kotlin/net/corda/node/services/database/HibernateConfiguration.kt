@@ -1,7 +1,6 @@
 package net.corda.node.services.database
 
 import net.corda.core.schemas.MappedSchema
-import net.corda.core.utilities.debug
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.api.SchemaService
 import org.hibernate.SessionFactory

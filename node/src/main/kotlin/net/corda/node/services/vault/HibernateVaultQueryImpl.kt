@@ -62,15 +62,15 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
 
                 // pagination
                 if (paging.pageNumber < 0) throw VaultQueryException("Page specification: invalid page number ${paging.pageNumber} [page numbers start from 0]")
-                if (paging.pageSize < 0 || paging.pageSize > MAX_PAGE_SIZE) throw VaultQueryException("Page specification: invalid page size ${paging.pageSize} [maximum page size is ${MAX_PAGE_SIZE}]")
+                 if (paging.pageSize < 0 || paging.pageSize > MAX_PAGE_SIZE) throw VaultQueryException("Page specification: invalid page size ${paging.pageSize} [maximum page size is ${MAX_PAGE_SIZE}]")
 
                 // count total results available
                 val countQuery = criteriaBuilder.createQuery(Long::class.java)
                 countQuery.select(criteriaBuilder.count(countQuery.from(VaultSchemaV1.VaultStates::class.java)))
                 val totalStates = session.createQuery(countQuery).singleResult.toInt()
 
-                if (paging.pageSize * paging.pageNumber >= totalStates)
-                    throw VaultQueryException("Requested more results than available [${paging.pageSize} * ${paging.pageNumber} > ${totalStates}]")
+                if ((paging.pageNumber != 0) && (paging.pageSize * paging.pageNumber >= totalStates))
+                    throw VaultQueryException("Requested more results than available [${paging.pageSize} * ${paging.pageNumber} >= ${totalStates}]")
 
                 query.firstResult = paging.pageNumber * paging.pageSize
                 query.maxResults = paging.pageSize
@@ -97,6 +97,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         }
     }
 
+    @Throws(VaultQueryException::class)
     override fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.PageAndUpdates<T> {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }

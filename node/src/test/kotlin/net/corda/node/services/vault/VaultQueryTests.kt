@@ -1,17 +1,22 @@
 package net.corda.node.services.vault
 
+import net.corda.contracts.CommercialPaper
 import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.DUMMY_CASH_ISSUER
 import net.corda.contracts.testing.*
 import net.corda.core.contracts.*
 import net.corda.core.crypto.entropyToKeyPair
+import net.corda.core.days
 import net.corda.core.identity.Party
 import net.corda.core.node.services.*
 import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.QueryCriteria.*
+import net.corda.core.seconds
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
+import net.corda.core.utilities.DUMMY_NOTARY_KEY
+import net.corda.core.utilities.TEST_TX_TIME
 import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.schema.NodeSchemaService
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
@@ -24,6 +29,7 @@ import net.corda.schemas.CommercialPaperSchemaV2
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
+import org.assertj.core.api.Assertions
 import org.assertj.core.api.Assertions.assertThat
 import org.bouncycastle.asn1.x500.X500Name
 import org.jetbrains.exposed.sql.Database
@@ -330,6 +336,239 @@ open class VaultQueryTests {
         }
     }
 
+    /**
+     *  Logical Operator tests [Operator]
+     */
+
+    @Test
+    fun `logical operator EQUAL`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.EQUAL, GBP.currencyCode)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    @Test
+    fun `logical operator NOT EQUAL`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.NOT_EQUAL, GBP.currencyCode)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(2)
+        }
+    }
+
+    @Test
+    fun `logical operator GREATER_THAN`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(1.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.GREATER_THAN, 1000L)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    @Test
+    fun `logical operator GREATER_THAN_OR_EQUAL`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(1.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.GREATER_THAN_OR_EQUAL, 1000L)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(2)
+        }
+    }
+
+    @Test
+    fun `logical operator LESS_THAN`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(1.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.LESS_THAN, 1000L)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    @Test
+    fun `logical operator LESS_THAN_OR_EQUAL`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(1.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.LESS_THAN_OR_EQUAL, 1000L)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(2)
+        }
+    }
+
+    @Test
+    fun `logical operator BETWEEN`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(1.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+//            val penniesRange = Pair(5L, 15L)
+//            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.BETWEEN, penniesRange)
+//            val criteria = VaultCustomQueryCriteria(logicalExpression)
+//            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+//            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    @Test(expected = VaultQueryException::class)
+    fun `BAD logical operator BETWEEN`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(1.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.BETWEEN, 1000L)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    @Test
+    fun `logical operator IN`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+//            val currencies = listOf(CHF.currencyCode, GBP.currencyCode)
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.IN, "GBP")
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(2)
+        }
+    }
+
+    @Test
+    fun `logical operator NOT IN`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+//            val currencies = listOf(CHF.currencyCode, GBP.currencyCode)
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.NOT_IN, "GBP")
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    @Test
+    fun `logical operator LIKE`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.LIKE, "%BP")  // GPB
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(1)
+        }
+    }
+
+    @Test(expected = VaultQueryException::class)
+    fun `BAD logical operator LIKE`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.LIKE, 123L)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            vaultQuerySvc.queryBy<Cash.State>(criteria)
+        }
+    }
+
+    @Test
+    fun `logical operator NOT LIKE`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.NOT_LIKE, "%BP")  // GBP
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(2)
+        }
+    }
+
+    @Test
+    fun `logical operator IS_NULL`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+//            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::issuerRef, Operator.IS_NULL, ByteArray(1))
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::issuerParty, Operator.IS_NULL, "")
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(3)
+        }
+    }
+
+    @Test
+    fun `logical operator NOT_NULL`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+//            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::issuerRef, Operator.NOT_NULL)
+            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::issuerParty, Operator.NOT_NULL, "")
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
+            assertThat(results.states).hasSize(3)
+        }
+    }
+
     private val TODAY = LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC)
 
     @Test
@@ -468,7 +707,7 @@ open class VaultQueryTests {
 
             val sortCol1 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, VaultSchemaV1.VaultStates::contractStateClassName.name, Sort.Direction.DESC)
             val sortCol2 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, VaultSchemaV1.VaultStates::stateStatus.name, Sort.Direction.ASC)
-            val sortCol3 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, VaultSchemaV1.VaultStates::consumedTime.name, Sort.Direction.DESC, Sort.NullHandling.NULLS_LAST)
+            val sortCol3 = Sort.SortColumn(VaultSchemaV1.VaultStates::class.java, VaultSchemaV1.VaultStates::consumedTime.name, Sort.Direction.DESC)
             val sorting = Sort(setOf(sortCol1, sortCol2, sortCol3))
             val result = vaultQuerySvc.queryBy<ContractState>(VaultQueryCriteria(status = Vault.StateStatus.ALL), sorting = sorting)
 
@@ -941,24 +1180,128 @@ open class VaultQueryTests {
         }
     }
 
+    /** Vault Custom Query tests */
+
+    // specifying Query on Commercial Paper contract state attributes
     @Test
-    fun `unconsumed fungible assets for several currencies`() {
+    fun `custom query using JPA - commercial paper schema V1 single attribute`() {
         database.transaction {
 
-            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
-            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 3, 3, Random(0L))
-            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 3, 3, Random(0L))
+            val issuance = MEGA_CORP.ref(1)
 
-//            val currencies = listOf(CHF.currencyCode, GBP.currencyCode)
-//            val currencyCriteria = LogicalExpression(CashSchemaV1.PersistentCashState::currency, Operator.IN, currencies)
-//            val criteria = VaultCustomQueryCriteria(currencyCriteria)
-//            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
-//            assertThat(results.states).hasSize(3)
+            // MegaCorp™ issues $10,000 of commercial paper, to mature in 30 days, owned by itself.
+            val faceValue = 10000.DOLLARS `issued by` DUMMY_CASH_ISSUER
+            val commercialPaper =
+                    CommercialPaper().generateIssue(issuance, faceValue, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
+                        addTimeWindow(TEST_TX_TIME, 30.seconds)
+                        signWith(MEGA_CORP_KEY)
+                        signWith(DUMMY_NOTARY_KEY)
+                    }.toSignedTransaction()
+            services.recordTransactions(commercialPaper)
+
+            // MegaCorp™ now issues £10,000 of commercial paper, to mature in 30 days, owned by itself.
+            val faceValue2 = 10000.POUNDS `issued by` DUMMY_CASH_ISSUER
+            val commercialPaper2 =
+                    CommercialPaper().generateIssue(issuance, faceValue2, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
+                        addTimeWindow(TEST_TX_TIME, 30.seconds)
+                        signWith(MEGA_CORP_KEY)
+                        signWith(DUMMY_NOTARY_KEY)
+                    }.toSignedTransaction()
+            services.recordTransactions(commercialPaper2)
+
+            val ccyIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
+            val criteria1 = QueryCriteria.VaultCustomQueryCriteria(ccyIndex)
+
+            val result = vaultQuerySvc.queryBy<CommercialPaper.State>(criteria1)
+
+            Assertions.assertThat(result.states).hasSize(1)
+            Assertions.assertThat(result.statesMetadata).hasSize(1)
         }
     }
 
-    /** Vault Custom Query tests */
+    // specifying Query on Commercial Paper contract state attributes
+    @Test
+    fun `custom query using JPA - commercial paper schema V1 - multiple attributes`() {
+        database.transaction {
 
+            val issuance = MEGA_CORP.ref(1)
+
+            // MegaCorp™ issues $10,000 of commercial paper, to mature in 30 days, owned by itself.
+            val faceValue = 10000.DOLLARS `issued by` DUMMY_CASH_ISSUER
+            val commercialPaper =
+                    CommercialPaper().generateIssue(issuance, faceValue, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
+                        addTimeWindow(TEST_TX_TIME, 30.seconds)
+                        signWith(MEGA_CORP_KEY)
+                        signWith(DUMMY_NOTARY_KEY)
+                    }.toSignedTransaction()
+            services.recordTransactions(commercialPaper)
+
+            // MegaCorp™ now issues £5,000 of commercial paper, to mature in 30 days, owned by itself.
+            val faceValue2 = 5000.POUNDS `issued by` DUMMY_CASH_ISSUER
+            val commercialPaper2 =
+                    CommercialPaper().generateIssue(issuance, faceValue2, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
+                        addTimeWindow(TEST_TX_TIME, 30.seconds)
+                        signWith(MEGA_CORP_KEY)
+                        signWith(DUMMY_NOTARY_KEY)
+                    }.toSignedTransaction()
+            services.recordTransactions(commercialPaper2)
+
+            val ccyIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
+            val maturityIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
+            val faceValueIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
+
+            val criteria1 = QueryCriteria.VaultCustomQueryCriteria(ccyIndex)
+            val criteria2 = QueryCriteria.VaultCustomQueryCriteria(maturityIndex)
+            val criteria3 = QueryCriteria.VaultCustomQueryCriteria(faceValueIndex)
+
+            val result = vaultQuerySvc.queryBy<CommercialPaper.State>(criteria1.and(criteria3).and(criteria2))
+
+            Assertions.assertThat(result.states).hasSize(1)
+            Assertions.assertThat(result.statesMetadata).hasSize(1)
+        }
+    }
+
+    // specifying Query on Commercial Paper contract state attributes
+    @Test
+    fun `custom query using JPA - commercial paper schema V2`() {
+        database.transaction {
+
+            val issuance = MEGA_CORP.ref(1)
+
+            // MegaCorp™ issues $10,000 of commercial paper, to mature in 30 days, owned by itself.
+            val faceValue = 10000.DOLLARS `issued by` DUMMY_CASH_ISSUER
+            val commercialPaper =
+                    CommercialPaper().generateIssue(issuance, faceValue, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
+                        addTimeWindow(TEST_TX_TIME, 30.seconds)
+                        signWith(MEGA_CORP_KEY)
+                        signWith(DUMMY_NOTARY_KEY)
+                    }.toSignedTransaction()
+            services.recordTransactions(commercialPaper)
+
+            // MegaCorp™ now issues £10,000 of commercial paper, to mature in 30 days, owned by itself.
+            val faceValue2 = 10000.POUNDS `issued by` DUMMY_CASH_ISSUER
+            val commercialPaper2 =
+                    CommercialPaper().generateIssue(issuance, faceValue2, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
+                        addTimeWindow(TEST_TX_TIME, 30.seconds)
+                        signWith(MEGA_CORP_KEY)
+                        signWith(DUMMY_NOTARY_KEY)
+                    }.toSignedTransaction()
+            services.recordTransactions(commercialPaper2)
+
+            val ccyIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
+            val maturityIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
+            val faceValueIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::quantity, Operator.GREATER_THAN_OR_EQUAL, 10000L)
+
+            val criteria1 = QueryCriteria.VaultCustomQueryCriteria(ccyIndex)
+            val criteria2 = QueryCriteria.VaultCustomQueryCriteria(maturityIndex)
+            val criteria3 = QueryCriteria.VaultCustomQueryCriteria(faceValueIndex)
+
+            val result = vaultQuerySvc.queryBy<CommercialPaper.State>(criteria1.and(criteria3).and(criteria2))
+
+            Assertions.assertThat(result.states).hasSize(1)
+            Assertions.assertThat(result.statesMetadata).hasSize(1)
+        }
+    }
 
 
     /** Chaining together different Query Criteria tests**/

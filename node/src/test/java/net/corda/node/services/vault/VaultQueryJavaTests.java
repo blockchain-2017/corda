@@ -6,9 +6,7 @@ import net.corda.contracts.asset.Cash;
 import net.corda.core.contracts.*;
 import net.corda.core.crypto.SecureHash;
 import net.corda.core.identity.AbstractParty;
-import net.corda.core.node.services.Vault;
-import net.corda.core.node.services.VaultQueryService;
-import net.corda.core.node.services.VaultService;
+import net.corda.core.node.services.*;
 import net.corda.core.node.services.vault.*;
 import net.corda.core.node.services.vault.QueryCriteria.LinearStateQueryCriteria;
 import net.corda.core.node.services.vault.QueryCriteria.VaultCustomQueryCriteria;
@@ -48,6 +46,7 @@ import static net.corda.node.utilities.DatabaseSupportKt.transaction;
 import static net.corda.testing.CoreTestUtils.getMEGA_CORP;
 import static net.corda.testing.node.MockServicesKt.makeTestDataSourceProperties;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 @Ignore
 public class VaultQueryJavaTests {
@@ -278,7 +277,12 @@ public class VaultQueryJavaTests {
             PageSpecification pageSpec  = new PageSpecification(0, getMAX_PAGE_SIZE());
             Sort.SortColumn sortByUid = new Sort.SortColumn(VaultSchemaV1.VaultLinearStates.class, "uuid", Sort.Direction.DESC, Sort.NullHandling.NULLS_LAST);
             Sort sorting = new Sort(ImmutableSet.of(sortByUid));
-            Vault.PageAndUpdates<ContractState> results = vaultQuerySvc.trackBy(compositeCriteria, pageSpec, sorting);
+            Vault.PageAndUpdates<ContractState> results = null;
+            try {
+                results = vaultQuerySvc.trackBy(compositeCriteria, pageSpec, sorting);
+            } catch (VaultQueryException e) {
+                fail(e.getMessage());
+            }
 
             Vault.Page<ContractState> snapshot = results.getCurrent();
             Observable<Vault.Update> updates = results.getFuture();

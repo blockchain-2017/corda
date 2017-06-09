@@ -5,7 +5,6 @@ import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.crypto.toBase58String
 import net.corda.core.identity.AbstractParty
-import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultQueryException
 import net.corda.core.node.services.vault.IQueryCriteriaParser
@@ -16,6 +15,8 @@ import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.PersistentStateRef
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.serialization.toHexString
+import net.corda.core.utilities.loggerFor
+import net.corda.core.utilities.trace
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import org.bouncycastle.asn1.x500.X500Name
@@ -34,6 +35,9 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                                    val criteriaBuilder: CriteriaBuilder,
                                    val criteriaQuery: CriteriaQuery<VaultSchemaV1.VaultStates>,
                                    val vaultStates: Root<VaultSchemaV1.VaultStates>) : IQueryCriteriaParser {
+    private companion object {
+        val log = loggerFor<HibernateQueryCriteriaParser>()
+    }
 
     // incrementally build list of join predicates
     private var joinPredicates = mutableListOf<Predicate>()
@@ -42,6 +46,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
     override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) : Collection<Predicate> {
 
+        log.trace { "Parsing VaultQueryCriteria: $criteria" }
         var predicateSet = mutableSetOf<Predicate>()
 
         rootEntities.putIfAbsent(VaultSchemaV1.VaultStates::class.java, vaultStates)
@@ -120,6 +125,8 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
     override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) : Collection<Predicate> {
 
+        log.trace { "Parsing FungibleAssetQueryCriteria: $criteria" }
+
         var predicateSet = mutableSetOf<Predicate>()
 
         val vaultFungibleStates = criteriaQuery.from(VaultSchemaV1.VaultFungibleStates::class.java)
@@ -171,6 +178,8 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
     override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria) : Collection<Predicate> {
 
+        log.trace { "Parsing LinearStateQueryCriteria: $criteria" }
+
         var predicateSet = mutableSetOf<Predicate>()
 
         val vaultLinearStates = criteriaQuery.from(VaultSchemaV1.VaultLinearStates::class.java)
@@ -206,6 +215,8 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): Collection<Predicate> {
+
+        log.trace { "Parsing VaultCustomQueryCriteria: $criteria" }
 
         var predicateSet = mutableSetOf<Predicate>()
 
@@ -255,6 +266,8 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
     override fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
 
+        log.trace { "Parsing OR QueryCriteria composition: $left OR $right" }
+
         var predicateSet = mutableSetOf<Predicate>()
         val leftPredicates = parse(left)
         val rightPredicates = parse(right)
@@ -266,6 +279,8 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     override fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
+
+        log.trace { "Parsing AND QueryCriteria composition: $left AND $right" }
 
         var predicateSet = mutableSetOf<Predicate>()
         val leftPredicates = parse(left)
@@ -288,9 +303,40 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                     Operator.LESS_THAN -> criteriaBuilder.lessThan(attribute, value)
                     Operator.LESS_THAN_OR_EQUAL -> criteriaBuilder.lessThanOrEqualTo(attribute, value)
                     Operator.BETWEEN -> {
-                        val multiValue = value as Collection<T>
-                        criteriaBuilder.between(attribute, multiValue.first(), multiValue.last())
+                        try {
+                            val valuePair = value as Pair<T, T>
+                            criteriaBuilder.between(attribute, valuePair.first, valuePair.second)
+                        }
+                        catch (e: Exception) {
+                            throw VaultQueryException("operator $operator expects a Pair of values ($value)")
+                        }
                     }
+                    Operator.IN -> {
+                        if (value is Collection<*>)
+                            criteriaBuilder.`in`(value as Expression<out T>)
+                        else
+                            throw VaultQueryException("operator $operator expects a collection of values ($value)")
+                    }
+                    Operator.NOT_IN -> {
+                        if (value is Collection<*>)
+                            !criteriaBuilder.`in`(value as Expression<out T>)
+                        else
+                            throw VaultQueryException("operator $operator expects a collection of values ($value)")
+                    }
+                    Operator.LIKE -> {
+                        if (value is String)
+                            criteriaBuilder.like(attribute as Expression<String>, value)
+                        else
+                            throw VaultQueryException("operator $operator expects a SQL LIKE wildcarded expression (using '%' '_') as a String ($value)")
+                    }
+                    Operator.NOT_LIKE -> {
+                        if (value is String)
+                            criteriaBuilder.notLike(attribute as Expression<String>, value)
+                        else
+                            throw VaultQueryException("operator $operator expects a SQL LIKE wildcarded expression (using '%' '_') as a String ($value)")
+                    }
+                    Operator.IS_NULL -> criteriaBuilder.isNull(attribute)
+                    Operator.NOT_NULL -> criteriaBuilder.isNotNull(attribute)
                     else -> throw VaultQueryException("Invalid query operator: $operator.")
                 }
         return predicate
@@ -308,11 +354,16 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
     override fun parse(sorting: Sort) {
 
+        log.trace { "Parsing sorting specification: $sorting" }
+
         var orderCriteria = mutableListOf<Order>()
 
-        sorting.columns.map { (entityStateClass, entityStateColumnName, direction) ->
+        sorting.columns.map { (entityStateClass, entityStateColumnName, direction, nullHandling) ->
             val sortEntityRoot =
                     rootEntities.getOrElse(entityStateClass) { throw VaultQueryException("Missing root entity: $entityStateClass") }
+            if (nullHandling != Sort.NullHandling.NULLS_NONE)
+            // JPA Criteria does not support NULL ordering
+                throw VaultQueryException("Unsupported NULL ordering mode: $nullHandling. Current JPA implementation only supports NULLS_NONE")
             when (direction) {
                 Sort.Direction.ASC -> {
                     orderCriteria.add(criteriaBuilder.asc(sortEntityRoot.get<String>(entityStateColumnName)))

@@ -207,18 +207,21 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
         val logicalCondition =
                 when (logicalExpr?.operator) {
                     Operator.EQUAL -> queryAttribute.eq(logicalExpr.rightOperand)
+                    Operator.NOT_EQUAL -> queryAttribute.ne(logicalExpr.rightOperand)
+                    Operator.GREATER_THAN -> queryAttribute.gt(logicalExpr.rightOperand)
                     Operator.GREATER_THAN_OR_EQUAL -> queryAttribute.gte(logicalExpr.rightOperand)
 //                    Operator.AND -> queryAttribute.and(logicalExpr.rightOperand)
 //                    Operator.OR -> queryAttribute.or(logicalExpr.rightOperand)
-                    Operator.NOT_EQUAL -> queryAttribute.ne(logicalExpr.rightOperand)
                     Operator.LESS_THAN -> queryAttribute.lt(logicalExpr.rightOperand)
                     Operator.LESS_THAN_OR_EQUAL -> queryAttribute.lte(logicalExpr.rightOperand)
-                    Operator.GREATER_THAN -> queryAttribute.gt(logicalExpr.rightOperand)
+                    Operator.BETWEEN -> {
+                        val multiValue = logicalExpr.rightOperand as Collection<R>
+                        queryAttribute.between(multiValue.first(), multiValue.last())
+                    }
                     Operator.IN -> queryAttribute.`in`(logicalExpr.rightOperand)
                     Operator.NOT_IN -> queryAttribute.`notIn`(logicalExpr.rightOperand)
                     Operator.LIKE -> queryAttribute.like(logicalExpr.rightOperand as String)
                     Operator.NOT_LIKE -> queryAttribute.notLike(logicalExpr.rightOperand as String)
-//                    Operator.BETWEEN -> queryAttribute.between(logicalExpr.rightOperand)
                     Operator.IS_NULL -> queryAttribute.isNull
                     Operator.NOT_NULL -> queryAttribute.notNull()
                     else -> {
