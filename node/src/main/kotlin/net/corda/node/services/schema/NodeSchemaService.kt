@@ -58,12 +58,11 @@ class NodeSchemaService(customSchemas: Set<MappedSchema> = emptySet()) : SchemaS
     override fun generateMappedObject(state: ContractState, schema: MappedSchema): PersistentState {
         // TODO: DealState to be deprecated (collapsed into LinearState)
         if ((schema is VaultSchemaV1) && (state is DealState))
-            return VaultSchemaV1.VaultLinearStates(state.linearId, state.ref, state.parties)
+            return VaultSchemaV1.VaultLinearStates(state.linearId, state.ref, state.participants)
         if ((schema is VaultSchemaV1) && (state is LinearState))
-            return VaultSchemaV1.VaultLinearStates(state.linearId)
+            return VaultSchemaV1.VaultLinearStates(state.linearId, state.participants)
         if ((schema is VaultSchemaV1) && (state is FungibleAsset<*>))
-            return VaultSchemaV1.VaultFungibleStates(state.owner, state.exitKeys, state.amount.quantity, state.amount.token.issuer.party, state.amount.token.issuer.reference)
+            return VaultSchemaV1.VaultFungibleStates(state.owner, state.exitKeys, state.amount.quantity, state.amount.token.issuer.party, state.amount.token.issuer.reference, state.participants)
         return (state as QueryableState).generateMappedObject(schema)
     }
-
 }

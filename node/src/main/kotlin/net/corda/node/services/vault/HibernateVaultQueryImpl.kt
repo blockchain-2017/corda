@@ -1,5 +1,7 @@
 package net.corda.node.services.vault
 
+import net.corda.core.ThreadBox
+import net.corda.core.bufferUntilSubscribed
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.StateRef
@@ -18,7 +20,9 @@ import net.corda.core.serialization.storageKryo
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
+import net.corda.node.utilities.wrapWithDatabaseTransaction
 import org.jetbrains.exposed.sql.transactions.TransactionManager
+import rx.subjects.PublishSubject
 import java.lang.Exception
 import javax.persistence.EntityManager
 
@@ -97,9 +101,18 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         }
     }
 
+    private class InnerState {
+        val _updatesPublisher = PublishSubject.create<Vault.Update>()!!
+    }
+    private val mutex = ThreadBox(InnerState())
+
     @Throws(VaultQueryException::class)
-    override fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.PageAndUpdates<T> {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    override fun <T : ContractState> _trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.PageAndUpdates<T> {
+
+        return mutex.locked {
+            Vault.PageAndUpdates(_queryBy(criteria, paging, sorting, contractType),
+                              _updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
+        }
     }
 
     /**

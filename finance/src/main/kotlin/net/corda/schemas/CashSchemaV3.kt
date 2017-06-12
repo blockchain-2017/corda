@@ -19,10 +19,10 @@ object CashSchemaV3 : MappedSchema(schemaFamily = CashSchema.javaClass, version 
     class PersistentCashState(
 
             /** [ContractState] attributes */
-            @OneToMany(cascade = arrayOf(CascadeType.PERSIST))
+            @OneToMany(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
             var participants: Set<CommonSchemaV1.Party>,
 
-            @OneToOne(cascade = arrayOf(CascadeType.PERSIST))
+            @OneToOne(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
             @JoinColumn(name = "party_id")
             var owner: CommonSchemaV1.Party,
 

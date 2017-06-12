@@ -57,7 +57,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         // contract State Types
         val combinedContractTypeTypes = criteria.contractStateTypes?.plus(contractType) ?: setOf(contractType)
-        combinedContractTypeTypes?.filter { it.name != ContractState::class.java.name }?.let {
+        combinedContractTypeTypes.filter { it.name != ContractState::class.java.name }.let {
             val interfaces = it.flatMap { contractTypeMappings[it.name] ?: emptyList() }
             val concrete = it.filter { !it.isInterface }.map { it.name }
             val all = interfaces.plus(concrete)
@@ -86,8 +86,8 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         criteria.timeCondition?.let {
             val timeCondition = criteria.timeCondition
             val timeInstantType = timeCondition!!.leftOperand
-            val timeOperator = timeCondition?.operator
-            val timeValue = timeCondition?.rightOperand
+            val timeOperator = timeCondition.operator
+            val timeValue = timeCondition.rightOperand
             predicateSet.add(
                 when (timeInstantType) {
                     QueryCriteria.TimeInstantType.CONSUMED ->
@@ -95,11 +95,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                     QueryCriteria.TimeInstantType.RECORDED ->
                         criteriaBuilder.and(parseOperator(timeOperator, vaultStates.get<Instant>("recordedTime"), timeValue))
                 })
-        }
-
-        // participants (are associated with all ContractState types but not stored in the Vault States table - should they?)
-        criteria.participantIdentities?.let {
-            throw VaultQueryException("Unsupported query: unable to query on contract state participants until identity schemas defined")
         }
 
         return predicateSet
@@ -170,6 +165,15 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
             predicateSet.add(criteriaBuilder.equal(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key"), exitKeys))
         }
 
+        // participants
+        criteria.participants?.let {
+            val participants = criteria.participants as List<AbstractParty>
+            val joinFungibleStateToParty = vaultFungibleStates.join<VaultSchemaV1.VaultFungibleStates, CommonSchemaV1.Party>("participants")
+            val participantKeys = participants.map { it.owningKey.toBase58String() }
+            predicateSet.add(criteriaBuilder.and(joinFungibleStateToParty.get<CommonSchemaV1.Party>("key").`in`(participantKeys)))
+            criteriaQuery.distinct(true)
+        }
+
         return predicateSet
     }
 
@@ -200,12 +204,13 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
             predicateSet.add(criteriaBuilder.and(vaultLinearStates.get<String>("dealReference").`in`(dealRefs)))
         }
 
-        // deal parties
-        criteria.dealParties?.let {
-            val dealParties = criteria.dealParties as List<AbstractParty>
-            val joinLinearStateToParty = vaultLinearStates.join<VaultSchemaV1.VaultLinearStates, CommonSchemaV1.Party>("dealParties")
-            val dealPartyKeys = dealParties.map { it.owningKey.toBase58String() }
-            predicateSet.add(criteriaBuilder.equal(joinLinearStateToParty.get<CommonSchemaV1.Party>("key"), dealPartyKeys))
+        // deal participants
+        criteria.participants?.let {
+            val participants = criteria.participants as List<AbstractParty>
+            val joinLinearStateToParty = vaultLinearStates.join<VaultSchemaV1.VaultLinearStates, CommonSchemaV1.Party>("participants")
+            val participantKeys = participants.map { it.owningKey.toBase58String() }
+            predicateSet.add(criteriaBuilder.and(joinLinearStateToParty.get<CommonSchemaV1.Party>("key").`in`(participantKeys)))
+            criteriaQuery.distinct(true)
         }
 
         return predicateSet
@@ -217,11 +222,11 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         var predicateSet = mutableSetOf<Predicate>()
 
-        val (entityClass, attributeName) = resolveIt(criteria.indexExpression.leftOperand)
+        val (entityClass, attributeName, attributeValue) = resolveKotlinOrJava(criteria.indexExpression)
 
         try {
             val entityRoot = criteriaQuery.from(entityClass)
-            rootEntities.putIfAbsent(entityClass as Class<PersistentState>, entityRoot)
+            rootEntities.putIfAbsent(entityClass, entityRoot)
             criteriaQuery.select(vaultStates)
             val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
             joinPredicates.add(joinPredicate)
@@ -231,16 +236,18 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                 predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName))))
             }
             else if (criteria.indexExpression is CollectionExpression) {
-                val value = criteria.indexExpression.rightOperand as Collection<R>
+                @SuppressWarnings("unchecked")
+                val value = attributeValue as Collection<R>
                 predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
             }
             else {
-                val value = criteria.indexExpression.rightOperand   // TODO: Java Test failing here (.toString().javaClass)
+                @SuppressWarnings("unchecked")
+                val value = attributeValue as R
                 predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
             }
         }
         catch (e: Exception) {
-            e?.message?.let { message ->
+            e.message?.let { message ->
                 if (message.contains("Not an entity"))
                     throw VaultQueryException("""
                     Please register the entity '${entityClass.name.substringBefore('$')}' class in your CorDapp's CordaPluginRegistry configuration (requiredSchemas attribute)
@@ -253,17 +260,18 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         return predicateSet
     }
 
+    // NOTE: limitation in generics prevents using single parser for Nullable (R?) and non-Nullable (R) attribute value types
     override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteriaNullable<L, R>): Collection<Predicate> {
 
-        log.trace { "Parsing VaultCustomQueryCriteria: $criteria" }
+        log.trace { "Parsing VaultCustomQueryCriteriaNullable: $criteria" }
 
         var predicateSet = mutableSetOf<Predicate>()
 
-        val (entityClass, attributeName) = resolveIt(criteria.indexExpression.leftOperand)
+        val (entityClass, attributeName, attributeValue) = resolveKotlinOrJava(criteria.indexExpression)
 
         try {
             val entityRoot = criteriaQuery.from(entityClass)
-            rootEntities.putIfAbsent(entityClass as Class<PersistentState>, entityRoot)
+            rootEntities.putIfAbsent(entityClass, entityRoot)
             criteriaQuery.select(vaultStates)
             val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
             joinPredicates.add(joinPredicate)
@@ -273,16 +281,18 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                 predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName))))
             }
             else if (criteria.indexExpression is CollectionExpression) {
-                val values = criteria.indexExpression.rightOperand as Collection<R>
+                @SuppressWarnings("unchecked")
+                val values = attributeValue as Collection<R>
                 predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), values)))
             }
             else {
-                val value = criteria.indexExpression.rightOperand   // TODO: Java Test failing here (.toString().javaClass)
+                @SuppressWarnings("unchecked")
+                val value = attributeValue as R
                 predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
             }
         }
         catch (e: Exception) {
-            e?.message?.let { message ->
+            e.message?.let { message ->
                 if (message.contains("Not an entity"))
                     throw VaultQueryException("""
                     Please register the entity '${entityClass.name.substringBefore('$')}' class in your CorDapp's CordaPluginRegistry configuration (requiredSchemas attribute)
@@ -295,20 +305,28 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         return predicateSet
     }
 
-    private fun resolveIt(attribute: Any): Pair<Class<out Any>, String> {
+    private fun resolveKotlinOrJava(expression: Logical<*, *>): Triple<Class<out PersistentState>, String, Any?> {
 
-        val attributeClazzAndName : Pair<Class<out Any>, String> =
-            when (attribute) {
-                is Field -> {
-                    Pair(attribute.declaringClass, attribute.name)
+        val attribute = expression.leftOperand
+
+        @SuppressWarnings("unchecked")
+        val attributeClazzNameAndValue =
+                when (attribute) {
+                    is Field -> {
+                        val value = expression.rightOperand as Object
+                        Triple(attribute.declaringClass as Class<PersistentState>, attribute.name, value)
+                    }
+                    is KMutableProperty1<*,*> -> {
+                        val attributeClazz = ((attribute as MutablePropertyReference1).owner as KClass<*>).java
+                        if (expression is UnaryLogicalExpression<*>)
+                            Triple(attributeClazz as Class<PersistentState>, attribute.name, null )
+                        else
+                            Triple(attributeClazz as Class<PersistentState>, attribute.name, expression.rightOperand )
+                    }
+                    else -> throw VaultQueryException("Unrecognised attribute specified: $attribute")
                 }
-                is KMutableProperty1<*,*> -> {
-                    val entity = (attribute as MutablePropertyReference1).owner
-                    Pair((attribute.owner as KClass<*>).java, attribute.name)
-                }
-                else -> throw VaultQueryException("Unrecognised attribute specified: $attribute")
-            }
-        return attributeClazzAndName
+
+        return attributeClazzNameAndValue
     }
 
     override fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
@@ -343,6 +361,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         check(values.size > 0) { "$operator expects at least one argument value [$values]"}
 
+        @SuppressWarnings("unchecked")
         val predicate =
                 when (operator) {
                     Operator.BETWEEN -> {
@@ -418,7 +437,9 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                     rootEntities.getOrElse(entityStateClass) { throw VaultQueryException("Missing root entity: $entityStateClass") }
             if (nullHandling != Sort.NullHandling.NULLS_NONE)
             // JPA Criteria does not support NULL ordering
-                throw VaultQueryException("Unsupported NULL ordering mode: $nullHandling. Current JPA implementation only supports NULLS_NONE")
+                throw VaultQueryException("""Unsupported NULL ordering mode: $nullHandling.
+                                             Current JPA implementation only supports NULLS_NONE.
+                                             Watch our for our Requery implementation coming soon!""")
             when (direction) {
                 Sort.Direction.ASC -> {
                     orderCriteria.add(criteriaBuilder.asc(sortEntityRoot.get<String>(entityStateColumnName)))

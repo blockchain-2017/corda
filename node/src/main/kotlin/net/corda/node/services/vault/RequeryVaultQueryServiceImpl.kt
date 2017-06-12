@@ -4,6 +4,8 @@ import io.requery.TransactionIsolation
 import io.requery.kotlin.eq
 import io.requery.kotlin.select
 import io.requery.query.OrderingExpression
+import net.corda.core.ThreadBox
+import net.corda.core.bufferUntilSubscribed
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.contracts.StateRef
@@ -21,6 +23,8 @@ import net.corda.core.utilities.loggerFor
 import net.corda.node.services.Models
 import net.corda.node.services.database.RequeryConfiguration
 import net.corda.node.services.vault.schemas.requery.VaultSchema
+import net.corda.node.utilities.wrapWithDatabaseTransaction
+import rx.subjects.PublishSubject
 import java.util.*
 
 class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : SingletonSerializeAsToken(), VaultQueryService {
@@ -107,13 +111,18 @@ class RequeryVaultQueryServiceImpl(dataSourceProperties: Properties) : Singleton
         }
     }
 
-    override fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.PageAndUpdates<T> {
-        TODO("Under construction")
+    private class InnerState {
+        val _updatesPublisher = PublishSubject.create<Vault.Update>()!!
+    }
+    private val mutex = ThreadBox(InnerState())
 
-//        return mutex.locked {
-//            Vault.PageAndUpdates(queryBy(criteria),
-//                              _updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
-//        }
+    @Throws(VaultQueryException::class)
+    override fun <T : ContractState> _trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.PageAndUpdates<T> {
+
+        return mutex.locked {
+            Vault.PageAndUpdates(_queryBy(criteria, paging, sorting, contractType),
+                    _updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
+        }
     }
 
     /**

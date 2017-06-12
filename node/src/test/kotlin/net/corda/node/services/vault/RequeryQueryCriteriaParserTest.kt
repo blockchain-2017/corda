@@ -171,20 +171,16 @@ class RequeryQueryCriteriaParserTest {
             val criteria5 = QueryCriteria.VaultQueryCriteria(includeSoftlockedStates = false)
             criteriaParse.parse(criteria5)
 
-            val participants = listOf(MEGA_CORP.name, MINI_CORP.name)
-            val criteria6 = QueryCriteria.VaultQueryCriteria(participantIdentities = participants)
-            criteriaParse.parse(criteria6)
-
             val start = TEST_TX_TIME
             val end = TEST_TX_TIME.plus(30, ChronoUnit.DAYS)
             val recordedBetweenExpression = LogicalExpression(QueryCriteria.TimeInstantType.RECORDED, Operator.BETWEEN, arrayOf(start, end))
-            val criteria7 = QueryCriteria.VaultQueryCriteria(timeCondition = recordedBetweenExpression)
-            criteriaParse.parse(criteria7)
+            val criteria6 = QueryCriteria.VaultQueryCriteria(timeCondition = recordedBetweenExpression)
+            criteriaParse.parse(criteria6)
 
             val criteriaAnd = criteria1.and(criteria2)
             criteriaParse.parse(criteriaAnd)
 
-            val criteriaOr = criteria4.or(criteria6)
+            val criteriaOr = criteria4.or(criteria5)
             criteriaParse.parse(criteriaOr)
 
             fail()
@@ -208,7 +204,7 @@ class RequeryQueryCriteriaParserTest {
             criteriaParse.parse(criteria2)
 
             val dealParties = listOf(MEGA_CORP, MINI_CORP)
-            val criteria3 = QueryCriteria.LinearStateQueryCriteria(dealParties = dealParties)
+            val criteria3 = QueryCriteria.LinearStateQueryCriteria(participants = dealParties)
             criteriaParse.parse(criteria3)
 
             val criteriaAnd = criteria1.and(criteria2)

@@ -69,7 +69,7 @@ class CordaRPCOpsImpl(
                                                   paging: PageSpecification,
                                                   sorting: Sort): Vault.PageAndUpdates<T> {
         return database.transaction {
-            services.vaultQueryService.trackBy<T>(criteria, paging, sorting)
+            services.vaultQueryService._trackBy<T>(criteria, paging, sorting, ContractState::class.java as Class<T>)
         }
     }
 

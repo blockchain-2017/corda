@@ -368,9 +368,10 @@ interface VaultQueryService {
      *        the [QueryCriteria] applies to both snapshot and deltas (streaming updates).
      */
     @Throws(VaultQueryException::class)
-    fun <T : ContractState> trackBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
+    fun <T : ContractState> _trackBy(criteria: QueryCriteria = QueryCriteria.VaultQueryCriteria(),
                                     paging: PageSpecification = PageSpecification(),
-                                    sorting: Sort = Sort(emptySet())): Vault.PageAndUpdates<T>
+                                    sorting: Sort = Sort(emptySet()),
+                                    contractType: Class<out ContractState>): Vault.PageAndUpdates<T>
     // DOCEND VaultQueryAPI
 
     // Note: cannot apply @JvmOverloads to interfaces nor interface implementations
@@ -380,9 +381,10 @@ interface VaultQueryService {
     fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, sorting: Sort): Vault.Page<T> = _queryBy(criteria, PageSpecification(), sorting, contractType)
     fun <T : ContractState> queryBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> = _queryBy(criteria, paging, sorting, contractType)
 
-    fun <T : ContractState> trackBy(criteria: QueryCriteria): Vault.PageAndUpdates<T> = trackBy(criteria, PageSpecification(), Sort(emptySet()))
-    fun <T : ContractState> trackBy(criteria: QueryCriteria, paging: PageSpecification): Vault.PageAndUpdates<T> = trackBy(criteria, paging, Sort(emptySet()))
-    fun <T : ContractState> trackBy(criteria: QueryCriteria, sorting: Sort): Vault.PageAndUpdates<T> = trackBy(criteria, sorting = Sort(emptySet()))
+    fun <T : ContractState> trackBy(contractType: Class<out ContractState>, criteria: QueryCriteria): Vault.PageAndUpdates<T> = _trackBy(criteria, PageSpecification(), Sort(emptySet()), contractType)
+    fun <T : ContractState> trackBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification): Vault.PageAndUpdates<T> = _trackBy(criteria, paging, Sort(emptySet()), contractType)
+    fun <T : ContractState> trackBy(contractType: Class<out ContractState>, criteria: QueryCriteria, sorting: Sort): Vault.PageAndUpdates<T> = _trackBy(criteria, PageSpecification(), sorting, contractType)
+    fun <T : ContractState> trackBy(contractType: Class<out ContractState>, criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.PageAndUpdates<T> = _trackBy(criteria, paging, sorting, contractType)
 }
 
 inline fun <reified T : ContractState> VaultQueryService.queryBy(): Vault.Page<T> {
@@ -403,6 +405,26 @@ inline fun <reified T : ContractState> VaultQueryService.queryBy(criteria: Query
 
 inline fun <reified T : ContractState> VaultQueryService.queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.Page<T> {
     return _queryBy(criteria, paging, sorting, T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultQueryService.trackBy(): Vault.PageAndUpdates<T> {
+    return _trackBy(QueryCriteria.VaultQueryCriteria(), PageSpecification(), Sort(emptySet()), T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultQueryService.trackBy(criteria: QueryCriteria): Vault.PageAndUpdates<T> {
+    return _trackBy(criteria, PageSpecification(), Sort(emptySet()), T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultQueryService.trackBy(criteria: QueryCriteria, paging: PageSpecification): Vault.PageAndUpdates<T> {
+    return _trackBy(criteria, paging, Sort(emptySet()), T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultQueryService.trackBy(criteria: QueryCriteria, sorting: Sort): Vault.PageAndUpdates<T> {
+    return _trackBy(criteria, PageSpecification(), sorting, T::class.java)
+}
+
+inline fun <reified T : ContractState> VaultQueryService.trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort): Vault.PageAndUpdates<T> {
+    return _trackBy(criteria, paging, sorting, T::class.java)
 }
 
 class VaultQueryException(description: String) : FlowException("$description")

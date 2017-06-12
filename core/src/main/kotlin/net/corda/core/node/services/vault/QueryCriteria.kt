@@ -35,8 +35,7 @@ sealed class QueryCriteria {
             val stateRefs: List<StateRef>? = null,
             val notaryName: List<X500Name>? = null,
             val includeSoftlockedStates: Boolean = true,
-            val timeCondition: Logical<TimeInstantType, Array<Instant>>? = null,
-            val participantIdentities: List<X500Name>? = null) : QueryCriteria() {
+            val timeCondition: Logical<TimeInstantType, Array<Instant>>? = null) : QueryCriteria() {
 
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseCriteria(this)
@@ -47,9 +46,9 @@ sealed class QueryCriteria {
      * LinearStateQueryCriteria: provides query by attributes defined in [VaultSchema.VaultLinearState]
      */
     data class LinearStateQueryCriteria @JvmOverloads constructor(
+            val participants: List<AbstractParty>? = null,
             val linearId: List<UniqueIdentifier>? = null,
-            val dealRef: List<String>? = null,
-            val dealParties: List<AbstractParty>? = null) : QueryCriteria() {
+            val dealRef: List<String>? = null) : QueryCriteria() {
 
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseCriteria(this)
@@ -64,7 +63,7 @@ sealed class QueryCriteria {
     *   [Commodity] as used in [CommodityContract] state
     */
     data class FungibleAssetQueryCriteria @JvmOverloads constructor(
-           val participants: List<PublicKey>? = null,
+           val participants: List<AbstractParty>? = null,
            val owner: List<PublicKey>? = null,
            val quantity: Logical<*,Long>? = null,
            val issuerPartyName: List<AbstractParty>? = null,

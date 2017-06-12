@@ -1,14 +1,12 @@
 package net.corda.node.services.vault.schemas.jpa
 
 import net.corda.core.contracts.UniqueIdentifier
-import net.corda.core.crypto.toBase58String
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.AnonymousParty
 import net.corda.core.node.services.Vault
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
 import net.corda.core.serialization.OpaqueBytes
-import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1.LinearState
 import java.security.PublicKey
 import java.time.Instant
 import java.util.*
@@ -71,14 +69,18 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
     @Table(name = "vault_linear_states",
             indexes = arrayOf(Index(name = "external_id_index", columnList = "external_id"),
                               Index(name = "uuid_index", columnList = "uuid"),
-                                Index(name = "deal_reference_idx", columnList = "deal_reference")))
+                              Index(name = "deal_reference_index", columnList = "deal_reference")))
     class VaultLinearStates(
+
+            /** [ContractState] attributes */
+            @OneToMany(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
+            var participants: Set<CommonSchemaV1.Party>,
+
             /**
              *  Represents a [LinearState] [UniqueIdentifier]
              */
             @Column(name = "external_id")
-            var externalId: String?,     // TODO: Generics prevent using a Nullable type
-//            var externalId: String,
+            var externalId: String?,
 
             @Column(name = "uuid", nullable = false)
             var uuid: UUID,
@@ -87,16 +89,16 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
 
             /** Deal State attributes **/
             @Column(name = "deal_reference")
-            var dealReference: String,
-
-            @OneToMany(cascade = arrayOf(CascadeType.PERSIST))
-//            @JoinColumn(name = "party_id")
-            var dealParties: Set<CommonSchemaV1.Party>
+            var dealReference: String
 
     ) : PersistentState() {
-        constructor(uid: UniqueIdentifier) : this(externalId = uid.externalId, uuid = uid.id, dealReference = "", dealParties = setOf())
-        constructor(uid: UniqueIdentifier, _dealReference: String, _dealParties: List<AbstractParty>) : this(externalId = uid.externalId ?: "", uuid = uid.id,
-                dealReference = _dealReference, dealParties = _dealParties.map{ CommonSchemaV1.Party(it) }.toSet() )
+        constructor(uid: UniqueIdentifier, _participants: List<AbstractParty>) :
+                this(uid, "", _participants)
+        constructor(uid: UniqueIdentifier, _dealReference: String, _participants: List<AbstractParty>) :
+                this(externalId = uid.externalId,
+                     uuid = uid.id,
+                     dealReference = _dealReference,
+                     participants = _participants.map{ CommonSchemaV1.Party(it) }.toSet() )
     }
 
     @Entity
@@ -104,11 +106,11 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
     class VaultFungibleStates(
 
             /** [ContractState] attributes */
-//            @OneToMany
-//            var participants: Set<Party>,
+            @OneToMany(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
+            var participants: Set<CommonSchemaV1.Party>,
 
             /** [OwnableState] attributes */
-            @OneToOne(cascade = arrayOf(CascadeType.PERSIST))
+            @OneToOne(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
             @JoinColumn(name = "party_id", insertable = false, updatable = false)
             var owner: CommonSchemaV1.Party,
 
@@ -118,8 +120,8 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
              *  custom contract itself (eg. see currency in Cash contract state)
              */
 
-            @OneToMany(cascade = arrayOf(CascadeType.PERSIST))
-            var exitKeys: Set<CommonSchemaV1.Party>,
+//            @OneToMany(cascade = arrayOf(CascadeType.PERSIST))
+//            var exitKeys: Set<CommonSchemaV1.Party>,
 
             /** Amount attributes */
 
@@ -127,7 +129,7 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             var quantity: Long,
 
             /** Issuer attributes */
-            @OneToOne(cascade = arrayOf(CascadeType.PERSIST))
+            @OneToOne(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
             @JoinColumn(name = "party_id")
             var issuerParty: CommonSchemaV1.Party,
 
@@ -135,11 +137,12 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             var issuerRef: ByteArray
 
     ) : PersistentState() {
-        constructor(_owner: AbstractParty, _exitKeys: Collection<PublicKey>, _quantity: Long, _issuerParty: AbstractParty, _issuerRef: OpaqueBytes) :
+        constructor(_owner: AbstractParty, _exitKeys: Collection<PublicKey>, _quantity: Long, _issuerParty: AbstractParty, _issuerRef: OpaqueBytes, _participants: List<AbstractParty>) :
                 this(owner = CommonSchemaV1.Party(_owner),
-                     exitKeys = _exitKeys.map { CommonSchemaV1.Party(AnonymousParty(it)) }.toSet(),
+//                     exitKeys = _exitKeys.map { CommonSchemaV1.Party(AnonymousParty(it)) }.toSet(),
                      quantity = _quantity,
                      issuerParty = CommonSchemaV1.Party(_issuerParty),
-                     issuerRef = _issuerRef.bytes)
+                     issuerRef = _issuerRef.bytes,
+                     participants =  _participants.map { CommonSchemaV1.Party(it) }.toSet())
     }
 }

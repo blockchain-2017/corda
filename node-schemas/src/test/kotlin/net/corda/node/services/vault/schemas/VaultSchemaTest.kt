@@ -11,6 +11,7 @@ import io.requery.sql.platform.Generic
 import net.corda.contracts.testing.DummyDealContract
 import net.corda.contracts.testing.DummyLinearContract
 import net.corda.core.contracts.*
+import net.corda.core.contracts.TimeWindow
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.SecureHash
 import net.corda.core.crypto.generateKeyPair
@@ -118,9 +119,9 @@ class VaultSchemaTest {
         val inState3 = TransactionState(VaultNoopContract.VaultNoopState(ALICE), notary)
         val inState4 = TransactionState(DummyLinearContract.State(), notary)
         val inState5 = TransactionState(DummyDealContract.State(ref = "DEAL#12345",
-                                                                parties = listOf(ALICE.toAnonymous(), BOB.toAnonymous())), notary)
+                                                                participants = listOf(ALICE, BOB)), notary)
         val inState6 = TransactionState(DummyDealContract.State(ref = "DEAL#67890",
-                                                                parties = listOf(BOB.toAnonymous(), CHARLIE.toAnonymous())), notary)
+                                                                participants = listOf(BOB, CHARLIE)), notary)
         val outState1 = inState1.copy()
         val outState2 = inState2.copy()
         val outState3 = inState3.copy()
@@ -502,16 +503,16 @@ class VaultSchemaTest {
 //            val query = select(VaultSchema.VaultLinearState::class)
 //                    .join(VaultSchema.VaultParty::class)
 //                    .on(VaultSchema.VaultParty::linearStateParties.eq(VaultSchema.VaultParty::id))
-////                    .where(VaultSchema.VaultLinearState::dealParties.eq(linearStateEntity1.dealParties))
-////                    .where(VaultSchema.VaultLinearState::dealParties `in` linearStateEntity1.dealParties)
+////                    .where(VaultSchema.VaultLinearState::participants.eq(linearStateEntity1.participants))
+////                    .where(VaultSchema.VaultLinearState::participants `in` linearStateEntity1.participants)
 //
 //            val result = query.get()
 //            println(result.count())
 //            result.forEach {
-//                println("${it.dealRef}, ${it.uuid}, ${it.dealParties.forEach { println(it.name)} }")
+//                println("${it.dealRef}, ${it.uuid}, ${it.participants.forEach { println(it.name)} }")
 //            }
 //            assertEquals(1, result.count())
-//            Assert.assertSame(linearStateEntity1.dealParties, result.first().dealParties)
+//            Assert.assertSame(linearStateEntity1.participants, result.first().participants)
 //        }
 //    }
 //
@@ -538,8 +539,8 @@ class VaultSchemaTest {
 //            externalId = state.linearId.externalId
 //            dealRef = state.ref
 ////            owner = party1
-////            dealParties = setOf(party1, party2)
-//            dealParties = state.parties.map {
+////            participants = setOf(party1, party2)
+//            participants = state.parties.map {
 //                VaultPartyEntity().apply {
 //                    name = it.toString()
 //                    key = it.owningKey.toBase58String()

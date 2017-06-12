@@ -3,9 +3,7 @@
 package net.corda.contracts.testing
 
 import net.corda.contracts.DealState
-import net.corda.contracts.asset.Cash
-import net.corda.contracts.asset.DUMMY_CASH_ISSUER
-import net.corda.contracts.asset.DUMMY_CASH_ISSUER_KEY
+import net.corda.contracts.asset.*
 import net.corda.core.contracts.*
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.AnonymousParty
@@ -30,7 +28,7 @@ fun ServiceHub.fillWithSomeTestDeals(dealIds: List<String>,
     val transactions: List<SignedTransaction> = dealIds.map {
         // Issue a deal state
         val dummyIssue = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-            addOutputState(DummyDealContract.State(ref = it, parties = participants.plus(recipient) ,participants = participants.plus(recipient)))
+            addOutputState(DummyDealContract.State(ref = it, participants = participants.plus(recipient)))
             signWith(DUMMY_NOTARY_KEY)
         }
         return@map signInitialTransaction(dummyIssue)
@@ -117,6 +115,28 @@ fun ServiceHub.fillWithSomeTestCash(howMuch: Amount<Currency>,
     return Vault(states)
 }
 
+// TODO: need to make all FungibleAsset commands (issue, move, exit) generic
+fun ServiceHub.fillWithSomeTestCommodity(amount: Amount<Commodity>,
+                                    outputNotary: Party = DUMMY_NOTARY,
+                                    ref: OpaqueBytes = OpaqueBytes(ByteArray(1, { 1 })),
+                                    ownedBy: AbstractParty? = null,
+                                    issuedBy: PartyAndReference = DUMMY_OBLIGATION_ISSUER.ref(1),
+                                    issuerKey: KeyPair = DUMMY_OBLIGATION_ISSUER_KEY): Vault<CommodityContract.State> {
+
+    val myKey: PublicKey = ownedBy?.owningKey ?: myInfo.legalIdentity.owningKey
+    val me = AnonymousParty(myKey)
+
+    val commodity = CommodityContract()
+    val issuance = TransactionType.General.Builder(null as Party?)
+    commodity.generateIssue(issuance, Amount(amount.quantity, Issued(issuedBy.copy(reference = ref), amount.token)), me, outputNotary)
+    issuance.signWith(issuerKey)
+    val transaction = issuance.toSignedTransaction(true)
+
+    recordTransactions(transaction)
+
+    return Vault(setOf(transaction.tx.outRef<CommodityContract.State>(0)))
+}
+
 fun calculateRandomlySizedAmounts(howMuch: Amount<Currency>, min: Int, max: Int, rng: Random): LongArray {
     val numSlots = min + Math.floor(rng.nextDouble() * (max - min)).toInt()
     val baseSize = howMuch.quantity / numSlots
@@ -192,6 +212,7 @@ fun ServiceHub.consumeLinearStates(linearStates: List<StateAndRef<LinearState>>)
 fun ServiceHub.evolveLinearStates(linearStates: List<StateAndRef<LinearState>>) = consumeAndProduce(linearStates)
 fun ServiceHub.evolveLinearState(linearState: StateAndRef<LinearState>) : StateAndRef<LinearState> = consumeAndProduce(linearState)
 
+@JvmOverloads
 fun ServiceHub.consumeCash(amount: Amount<Currency>, to: Party = CHARLIE) {
 
     // A tx that spends our money.

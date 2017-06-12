@@ -115,11 +115,6 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
             }
         }
 
-        // participants (are associated with all ContractState types but not stored in the Vault States table - should they?)
-        criteria.participantIdentities?.let {
-            throw VaultQueryException("Unsupported query: unable to query on contract state participants until identity schemas defined")
-        }
-
         query.where(chainedConditions)
 
         return emptySet()
@@ -165,7 +160,7 @@ class RequeryQueryCriteriaParser(val contractTypeMappings: Map<String, List<Stri
 
         // deal parties
 //        logicalCondition?.and(
-//                criteria.dealParties?.let {
+//                criteria.participants?.let {
 //                    val attribute = findAttribute(VaultSchema.VaultDealState::parties).get()
 //                    val parties = it.map { it }.toSet()
 //                    attribute.eq(parties)

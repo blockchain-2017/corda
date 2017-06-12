@@ -24,6 +24,7 @@ import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.CashSchemaV1
 import net.corda.schemas.CashSchemaV1.PersistentCashState
+import net.corda.schemas.CashSchemaV3
 import net.corda.schemas.CommercialPaperSchemaV1
 import net.corda.schemas.CommercialPaperSchemaV2
 import net.corda.testing.*
@@ -31,6 +32,7 @@ import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
 import org.assertj.core.api.Assertions
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.bouncycastle.asn1.x500.X500Name
 import org.jetbrains.exposed.sql.Database
 import org.junit.After
@@ -86,6 +88,9 @@ open class VaultQueryTests {
         dataSource.close()
     }
 
+    /**
+     * Helper method for generating a Persistent H2 test database
+     */
     @Ignore //@Test
     fun createPersistentTestDb() {
 
@@ -306,20 +311,54 @@ open class VaultQueryTests {
         }
     }
 
-    @Test(expected = VaultQueryException::class)
-    fun `unconsumed states by participants`() {
+    @Test
+    fun `unconsumed linear states for single participant`() {
         database.transaction {
 
             services.fillWithSomeTestLinearStates(2, "TEST", participants = listOf(MEGA_CORP, MINI_CORP))
             services.fillWithSomeTestDeals(listOf("456"), participants = listOf(MEGA_CORP, BIG_CORP))
-            services.fillWithSomeTestDeals(listOf("123", "789"), participants = listOf(BIG_CORP, MINI_CORP))
+            services.fillWithSomeTestDeals(listOf("123", "789"), participants = listOf(BIG_CORP))
 
-            // DOCSTART VaultQueryExample5
-            val criteria = VaultQueryCriteria(participantIdentities = listOf(MEGA_CORP.name, MINI_CORP.name))
+            // DOCSTART VaultQueryExample5.1
+            val criteria = LinearStateQueryCriteria(participants = listOf(BIG_CORP))
             val results = vaultQuerySvc.queryBy<ContractState>(criteria)
-            // DOCEND VaultQueryExample5
+            // DOCEND VaultQueryExample5.1
 
             assertThat(results.states).hasSize(3)
+        }
+    }
+
+    @Test
+    fun `unconsumed linear states for two participants`() {
+        database.transaction {
+
+            services.fillWithSomeTestLinearStates(2, "TEST", participants = listOf(MEGA_CORP, MINI_CORP))
+            services.fillWithSomeTestDeals(listOf("456"), participants = listOf(MEGA_CORP, BIG_CORP))
+            services.fillWithSomeTestDeals(listOf("123", "789"), participants = listOf(BIG_CORP))
+
+            // DOCSTART VaultQueryExample5.1
+            val criteria = LinearStateQueryCriteria(participants = listOf(MEGA_CORP, MINI_CORP))
+            val results = vaultQuerySvc.queryBy<ContractState>(criteria)
+            // DOCEND VaultQueryExample5.1
+
+            assertThat(results.states).hasSize(3)
+        }
+    }
+
+    @Test
+    fun `unconsumed fungible states for participants`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, CASH_NOTARY, 1, 1, Random(0L), ownedBy = MEGA_CORP)
+            services.fillWithSomeTestCash(100.DOLLARS, CASH_NOTARY, 1, 1, Random(0L), ownedBy = MINI_CORP)
+            services.fillWithSomeTestCash(100.DOLLARS, CASH_NOTARY, 1, 1, Random(0L))
+
+            // DOCSTART VaultQueryExample5.2
+            val criteria = FungibleAssetQueryCriteria(participants = listOf(MEGA_CORP, MINI_CORP))
+            val results = vaultQuerySvc.queryBy<ContractState>(criteria)
+            // DOCEND VaultQueryExample5.2
+
+            assertThat(results.states).hasSize(2)
         }
     }
 
@@ -729,11 +768,11 @@ open class VaultQueryTests {
         database.transaction {
 
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
-//            services.fillWithSomeTestCommodity()
+            services.fillWithSomeTestCommodity(FCOJ(100))
             services.fillWithSomeTestLinearStates(10)
 
             val results = vaultQuerySvc.queryBy<FungibleAsset<*>>()
-            assertThat(results.states).hasSize(3)
+            assertThat(results.states).hasSize(4)
         }
     }
 
@@ -743,8 +782,7 @@ open class VaultQueryTests {
 
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
             services.consumeCash(50.DOLLARS)
-//            services.fillWithSomeTestCommodity()
-//            services.consumeCommodity()
+            services.fillWithSomeTestCommodity(FCOJ(100))
             services.fillWithSomeTestLinearStates(10)
 
             val criteria = VaultQueryCriteria(status = Vault.StateStatus.CONSUMED)
@@ -771,8 +809,8 @@ open class VaultQueryTests {
 
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
             services.consumeCash(50.DOLLARS)
-            services.fillWithSomeTestLinearStates(10)
-//          services.consumeLinearStates(8)
+            val linearStates = services.fillWithSomeTestLinearStates(10)
+            services.consumeLinearStates(linearStates.states.toList())
 
             val criteria = VaultQueryCriteria(status = Vault.StateStatus.CONSUMED)
             val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
@@ -858,8 +896,6 @@ open class VaultQueryTests {
             val results = vaultQuerySvc.queryBy<LinearState>(criteria)
             // DOCEND VaultQueryExample8
             assertThat(results.states).hasSize(2)
-            assertThat(results.states[0].state.data.linearId.externalId).isEqualTo("ID1")
-            assertThat(results.states[1].state.data.linearId.externalId).isEqualTo("ID3")
         }
     }
 
@@ -1023,9 +1059,9 @@ open class VaultQueryTests {
     fun `latest unconsumed deals for ref`() {
         database.transaction {
 
-//            services.fillWithSomeTestLinearStates(2, "TEST")
+            services.fillWithSomeTestLinearStates(2, "TEST")
             services.fillWithSomeTestDeals(listOf("456"))
-//            services.fillWithSomeTestDeals(listOf("123", "789"))
+            services.fillWithSomeTestDeals(listOf("123", "789"))
 
             val all = vaultQuerySvc.queryBy<DealState>()
             all.states.forEach { println(it.state) }
@@ -1048,7 +1084,7 @@ open class VaultQueryTests {
             services.fillWithSomeTestDeals(listOf("123", "789"))
 
             // DOCSTART VaultQueryExample11
-            val criteria = LinearStateQueryCriteria(dealParties = parties)
+            val criteria = LinearStateQueryCriteria(participants = parties)
             val results = vaultQuerySvc.queryBy<DealState>(criteria)
             // DOCEND VaultQueryExample11
 
@@ -1301,6 +1337,23 @@ open class VaultQueryTests {
         }
     }
 
+    @Test
+    fun `query attempting to use unregistered schema`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
+
+            // CashSchemaV3 NOT registered with NodeSchemaService
+            val logicalExpression = LogicalExpression(CashSchemaV3.PersistentCashState::currency, Operator.EQUAL, GBP.currencyCode)
+            val criteria = VaultCustomQueryCriteria(logicalExpression)
+
+            assertThatThrownBy {
+                vaultQuerySvc.queryBy<Cash.State>(criteria)
+            }.isInstanceOf(VaultQueryException::class.java).hasMessageContaining("Please register the entity")
+        }
+    }
 
     /** Chaining together different Query Criteria tests**/
 
