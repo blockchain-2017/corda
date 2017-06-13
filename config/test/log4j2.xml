@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="info">
     <Properties>
-        <Property name="defaultLogLevel">trace</Property>
+        <Property name="defaultLogLevel">info</Property>
     </Properties>
     <Appenders>
         <Console name="Console-Appender" target="SYSTEM_OUT">
@@ -21,9 +21,6 @@
         </Logger>
         <Logger name="BasicInfo" additivity="false">
             <AppenderRef ref="Console-Appender-Println"/>
-        </Logger>
-        <Logger name="net.corda.node.services.vault" level="trace" additivity="false">
-            <AppenderRef ref="Console-Appender"/>
         </Logger>
     </Loggers>
 </Configuration>
