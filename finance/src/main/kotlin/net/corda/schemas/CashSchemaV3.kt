@@ -19,11 +19,10 @@ object CashSchemaV3 : MappedSchema(schemaFamily = CashSchema.javaClass, version 
     class PersistentCashState(
 
             /** [ContractState] attributes */
-            @OneToMany(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
+            @OneToMany(cascade = arrayOf(CascadeType.ALL))
             var participants: Set<CommonSchemaV1.Party>,
 
-            @OneToOne(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
-            @JoinColumn(name = "party_id")
+            @OneToOne(cascade = arrayOf(CascadeType.ALL))
             var owner: CommonSchemaV1.Party,
 
             @Column(name = "pennies")
@@ -32,15 +31,18 @@ object CashSchemaV3 : MappedSchema(schemaFamily = CashSchema.javaClass, version 
             @Column(name = "ccy_code", length = 3)
             var currency: String,
 
-            @Column(name = "issuer_key")
-            var issuerParty: String,
+            @OneToOne(cascade = arrayOf(CascadeType.ALL))
+            var issuerParty: CommonSchemaV1.Party,
 
             @Column(name = "issuer_ref")
             var issuerRef: ByteArray
     ) : PersistentState() {
-        constructor(_participants: Set<AbstractParty>, _owner: AbstractParty, _quantity: Long, _currency: String, _issuerParty: String, _issuerRef: ByteArray)
-                : this(participants = _participants.map { CommonSchemaV1.Party(0, it.toString(), it.owningKey.toBase58String()) }.toSet(),
-                        owner = CommonSchemaV1.Party(0, _owner.toString(), _owner.owningKey.toBase58String()),
-                        pennies = _quantity, currency = _currency, issuerParty = _issuerParty, issuerRef = _issuerRef)
+        constructor(_participants: Set<AbstractParty>, _owner: AbstractParty, _quantity: Long, _currency: String, _issuerParty: AbstractParty, _issuerRef: ByteArray)
+                : this(participants = _participants.map { CommonSchemaV1.Party(it) }.toSet(),
+                        owner = CommonSchemaV1.Party(_owner),
+                        pennies = _quantity,
+                        currency = _currency,
+                        issuerParty = CommonSchemaV1.Party(_issuerParty),
+                        issuerRef = _issuerRef)
     }
 }

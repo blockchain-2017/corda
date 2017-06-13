@@ -7,18 +7,16 @@ import net.corda.contracts.testing.*
 import net.corda.core.contracts.*
 import net.corda.core.crypto.entropyToKeyPair
 import net.corda.core.days
+import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.Party
 import net.corda.core.node.services.*
 import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.QueryCriteria.*
 import net.corda.core.seconds
 import net.corda.core.serialization.OpaqueBytes
-import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import net.corda.core.utilities.TEST_TX_TIME
-import net.corda.node.services.database.HibernateConfiguration
-import net.corda.node.services.schema.NodeSchemaService
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
@@ -29,14 +27,11 @@ import net.corda.schemas.CommercialPaperSchemaV1
 import net.corda.schemas.CommercialPaperSchemaV2
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
-import net.corda.testing.node.makeTestDataSourceProperties
 import org.assertj.core.api.Assertions
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.bouncycastle.asn1.x500.X500Name
 import org.jetbrains.exposed.sql.Database
-import org.junit.After
-import org.junit.Before
 import org.junit.Ignore
 import org.junit.Test
 import java.io.Closeable
@@ -50,43 +45,13 @@ import java.time.temporal.ChronoUnit
 import java.util.*
 import kotlin.test.assertFails
 
-//abstract class VaultQueryTests {
-open class VaultQueryTests {
+abstract class VaultQueryTests {
 
     lateinit var services: MockServices
     val vaultSvc: VaultService get() = services.vaultService
     val vaultQuerySvc: VaultQueryService get() = services.vaultQueryService
     lateinit var dataSource: Closeable
     lateinit var database: Database
-
-    @Before
-    fun setUp() {
-        val dataSourceProps = makeTestDataSourceProperties()
-        val dataSourceAndDatabase = configureDatabase(dataSourceProps)
-        dataSource = dataSourceAndDatabase.first
-        database = dataSourceAndDatabase.second
-        database.transaction {
-            val customSchemas = setOf(CommercialPaperSchemaV1, CommercialPaperSchemaV2)
-            val hibernateConfig = HibernateConfiguration(NodeSchemaService(customSchemas))
-            services = object : MockServices(MEGA_CORP_KEY) {
-                override val vaultService: VaultService = makeVaultService(dataSourceProps, hibernateConfig)
-
-                override fun recordTransactions(txs: Iterable<SignedTransaction>) {
-                    for (stx in txs) {
-                        storageService.validatedTransactions.addTransaction(stx)
-                    }
-                    // Refactored to use notifyAll() as we have no other unit test for that method with multiple transactions.
-                    vaultService.notifyAll(txs.map { it.tx })
-                }
-                override val vaultQueryService : VaultQueryService = HibernateVaultQueryImpl(hibernateConfig)
-            }
-        }
-    }
-
-    @After
-    fun tearDown() {
-        dataSource.close()
-    }
 
     /**
      * Helper method for generating a Persistent H2 test database
@@ -342,23 +307,6 @@ open class VaultQueryTests {
             // DOCEND VaultQueryExample5.1
 
             assertThat(results.states).hasSize(3)
-        }
-    }
-
-    @Test
-    fun `unconsumed fungible states for participants`() {
-        database.transaction {
-
-            services.fillWithSomeTestCash(100.DOLLARS, CASH_NOTARY, 1, 1, Random(0L), ownedBy = MEGA_CORP)
-            services.fillWithSomeTestCash(100.DOLLARS, CASH_NOTARY, 1, 1, Random(0L), ownedBy = MINI_CORP)
-            services.fillWithSomeTestCash(100.DOLLARS, CASH_NOTARY, 1, 1, Random(0L))
-
-            // DOCSTART VaultQueryExample5.2
-            val criteria = FungibleAssetQueryCriteria(participants = listOf(MEGA_CORP, MINI_CORP))
-            val results = vaultQuerySvc.queryBy<ContractState>(criteria)
-            // DOCEND VaultQueryExample5.2
-
-            assertThat(results.states).hasSize(2)
         }
     }
 
@@ -1127,22 +1075,6 @@ open class VaultQueryTests {
     }
 
     @Test
-    fun `unconsumed fungible assets with exit keys`() {
-        database.transaction {
-
-            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (DUMMY_CASH_ISSUER))
-            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L), issuedBy = (BOC.ref(1)), issuerKey = BOC_KEY)
-
-            // DOCSTART VaultQueryExample15
-            val criteria = FungibleAssetQueryCriteria(exitKeys = listOf(BOC_PUBKEY))
-            val results = vaultQuerySvc.queryBy<FungibleAsset<*>>(criteria)
-            // DOCEND VaultQueryExample15
-
-            assertThat(results.states).hasSize(1)
-        }
-    }
-
-    @Test
     fun `unconsumed fungible assets by owner`() {
         database.transaction {
 
@@ -1150,9 +1082,29 @@ open class VaultQueryTests {
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L),
                     issuedBy = MEGA_CORP.ref(0), issuerKey = MEGA_CORP_KEY, ownedBy = (MEGA_CORP))
 
-            val criteria = FungibleAssetQueryCriteria(owner = listOf(MEGA_CORP_PUBKEY))
+            val criteria = FungibleAssetQueryCriteria(owner = listOf(MEGA_CORP))
             val results = vaultQuerySvc.queryBy<FungibleAsset<*>>(criteria)
             assertThat(results.states).hasSize(1)
+        }
+    }
+
+
+    @Test
+    fun `unconsumed fungible states for owners`() {
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, CASH_NOTARY, 1, 1, Random(0L))
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L),
+                    issuedBy = MEGA_CORP.ref(0), issuerKey = MEGA_CORP_KEY, ownedBy = (MEGA_CORP))
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L),
+                    issuedBy = MINI_CORP.ref(0), issuerKey = MINI_CORP_KEY, ownedBy = (MINI_CORP))  // irrelevant to this vault
+
+            // DOCSTART VaultQueryExample5.2
+            val criteria = FungibleAssetQueryCriteria(owner = listOf(MEGA_CORP,MINI_CORP))
+            val results = vaultQuerySvc.queryBy<ContractState>(criteria)
+            // DOCEND VaultQueryExample5.2
+
+            assertThat(results.states).hasSize(1)   // can only be 1 owner of a node (MEGA_CORP in this MockServices setup)
         }
     }
 

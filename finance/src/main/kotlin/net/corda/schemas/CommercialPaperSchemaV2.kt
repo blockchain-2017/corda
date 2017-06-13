@@ -15,7 +15,7 @@ import javax.persistence.Table
  * Second version of a cash contract ORM schema that extends the common
  * [VaultFungibleState] abstract schema
  */
-object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSchema.javaClass, version = 1, mappedTypes = listOf(PersistentCommercialPaperState::class.java)) {
+object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSchema.javaClass, version = 1, mappedTypes = listOf(PersistentCommercialPaperState::class.java, CommonSchemaV1.Party::class.java)) {
     @Entity
     @Table(name = "cp_states_v2",
            indexes = arrayOf(Index(name = "ccy_code_index2", columnList = "ccy_code"),
@@ -35,7 +35,9 @@ object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSche
             var faceValueIssuerRef: ByteArray,
 
             @Transient
-            val _owner: PublicKey,
+            val _participants: Set<AbstractParty>,
+            @Transient
+            val _owner: AbstractParty,
             @Transient
             // face value
             val _quantity: Long,
@@ -44,5 +46,5 @@ object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSche
             @Transient
             val _issuerRef: ByteArray
 
-    ) : CommonSchemaV1.FungibleState(_owner.toBase58String(), _quantity, _issuerParty, _issuerRef)
+    ) : CommonSchemaV1.FungibleState(_participants, _owner, _quantity, _issuerParty, _issuerRef)
 }

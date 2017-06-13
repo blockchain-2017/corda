@@ -64,11 +64,10 @@ sealed class QueryCriteria {
     */
     data class FungibleAssetQueryCriteria @JvmOverloads constructor(
            val participants: List<AbstractParty>? = null,
-           val owner: List<PublicKey>? = null,
+           val owner: List<AbstractParty>? = null,
            val quantity: Logical<*,Long>? = null,
            val issuerPartyName: List<AbstractParty>? = null,
-           val issuerRef: List<OpaqueBytes>? = null,
-           val exitKeys: List<PublicKey>? = null) : QueryCriteria() {
+           val issuerRef: List<OpaqueBytes>? = null) : QueryCriteria() {
 
        override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
            return parser.parseCriteria(this)

@@ -32,7 +32,7 @@ class NodeSchemaService(customSchemas: Set<MappedSchema> = emptySet()) : SchemaS
     val whitelistedSchemas: Map<MappedSchema, SchemaService.SchemaOptions> =
             mapOf(Pair(CashSchemaV1, SchemaService.SchemaOptions()),
                   Pair(CommonSchemaV1, SchemaService.SchemaOptions()),
-                  Pair(VaultSchemaV1, SchemaService.SchemaOptions(tablePrefix = "")))
+                  Pair(VaultSchemaV1, SchemaService.SchemaOptions()))
 
     override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = whitelistedSchemas.plus(customSchemas.map {
         mappedSchema -> Pair(mappedSchema, SchemaService.SchemaOptions())
@@ -60,9 +60,9 @@ class NodeSchemaService(customSchemas: Set<MappedSchema> = emptySet()) : SchemaS
         if ((schema is VaultSchemaV1) && (state is DealState))
             return VaultSchemaV1.VaultLinearStates(state.linearId, state.ref, state.participants)
         if ((schema is VaultSchemaV1) && (state is LinearState))
-            return VaultSchemaV1.VaultLinearStates(state.linearId, state.participants)
+            return VaultSchemaV1.VaultLinearStates(state.linearId, "", state.participants)
         if ((schema is VaultSchemaV1) && (state is FungibleAsset<*>))
-            return VaultSchemaV1.VaultFungibleStates(state.owner, state.exitKeys, state.amount.quantity, state.amount.token.issuer.party, state.amount.token.issuer.reference, state.participants)
+            return VaultSchemaV1.VaultFungibleStates(state.owner, state.amount.quantity, state.amount.token.issuer.party, state.amount.token.issuer.reference, state.participants)
         return (state as QueryableState).generateMappedObject(schema)
     }
 }

@@ -10,21 +10,16 @@ import net.corda.node.services.schema.NodeSchemaService
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
+import net.corda.schemas.CommercialPaperSchemaV1
+import net.corda.schemas.CommercialPaperSchemaV2
 import net.corda.testing.MEGA_CORP_KEY
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
-import org.jetbrains.exposed.sql.Database
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.io.Closeable
 
-class HibernateVaultQueryTests { //: VaultQueryTests() {
-
-    lateinit var services: MockServices
-    val vaultQuerySvc: VaultQueryService get() = services.vaultQueryService
-    lateinit var dataSource: Closeable
-    lateinit var database: Database
+class HibernateVaultQueryTests : VaultQueryTests() {
 
     @Before
     fun setUp() {
@@ -33,7 +28,8 @@ class HibernateVaultQueryTests { //: VaultQueryTests() {
         dataSource = dataSourceAndDatabase.first
         database = dataSourceAndDatabase.second
         database.transaction {
-            val hibernateConfig = HibernateConfiguration(NodeSchemaService())
+            val customSchemas = setOf(CommercialPaperSchemaV1, CommercialPaperSchemaV2)
+            val hibernateConfig = HibernateConfiguration(NodeSchemaService(customSchemas))
             services = object : MockServices(MEGA_CORP_KEY) {
                 override val vaultService: VaultService = makeVaultService(dataSourceProps, hibernateConfig)
 

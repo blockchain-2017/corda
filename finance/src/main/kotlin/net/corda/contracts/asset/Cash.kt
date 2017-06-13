@@ -10,7 +10,6 @@ import net.corda.core.contracts.clauses.GroupClauseVerifier
 import net.corda.core.contracts.clauses.verifyClause
 import net.corda.core.crypto.*
 import net.corda.core.identity.AbstractParty
-import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.Party
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
@@ -119,7 +118,8 @@ class Cash : OnLedgerAsset<Currency, Cash.Commands, Cash.State>() {
                         issuerRef = this.amount.token.issuer.reference.bytes
                 )
                 is CashSchemaV2 -> CashSchemaV2.PersistentCashState(
-                        _owner = this.owner.owningKey,
+                        _participants = this.participants.toSet(),
+                        _owner = this.owner,
                         _quantity = this.amount.quantity,
                         currency = this.amount.token.product.currencyCode,
                         _issuerParty = this.amount.token.issuer.party,
@@ -130,7 +130,7 @@ class Cash : OnLedgerAsset<Currency, Cash.Commands, Cash.State>() {
                         _owner = this.owner,
                         _quantity = this.amount.quantity,
                         _currency = this.amount.token.product.currencyCode,
-                        _issuerParty = this.amount.token.issuer.party.owningKey.toBase58String(),
+                        _issuerParty = this.amount.token.issuer.party,
                         _issuerRef = this.amount.token.issuer.reference.bytes
                 )
                 else -> throw IllegalArgumentException("Unrecognised schema $schema")

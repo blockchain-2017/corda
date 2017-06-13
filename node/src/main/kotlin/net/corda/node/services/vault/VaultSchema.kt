@@ -73,7 +73,7 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
     class VaultLinearStates(
 
             /** [ContractState] attributes */
-            @OneToMany(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
+            @OneToMany(cascade = arrayOf(CascadeType.ALL))
             var participants: Set<CommonSchemaV1.Party>,
 
             /**
@@ -92,8 +92,6 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             var dealReference: String
 
     ) : PersistentState() {
-        constructor(uid: UniqueIdentifier, _participants: List<AbstractParty>) :
-                this(uid, "", _participants)
         constructor(uid: UniqueIdentifier, _dealReference: String, _participants: List<AbstractParty>) :
                 this(externalId = uid.externalId,
                      uuid = uid.id,
@@ -106,12 +104,11 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
     class VaultFungibleStates(
 
             /** [ContractState] attributes */
-            @OneToMany(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
+            @OneToMany(cascade = arrayOf(CascadeType.ALL))
             var participants: Set<CommonSchemaV1.Party>,
 
             /** [OwnableState] attributes */
-            @OneToOne(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
-            @JoinColumn(name = "party_id", insertable = false, updatable = false)
+            @OneToOne(cascade = arrayOf(CascadeType.ALL))
             var owner: CommonSchemaV1.Party,
 
             /** [FungibleAsset] attributes
@@ -120,26 +117,21 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
              *  custom contract itself (eg. see currency in Cash contract state)
              */
 
-//            @OneToMany(cascade = arrayOf(CascadeType.PERSIST))
-//            var exitKeys: Set<CommonSchemaV1.Party>,
-
             /** Amount attributes */
 
             @Column(name = "quantity")
             var quantity: Long,
 
             /** Issuer attributes */
-            @OneToOne(cascade = arrayOf(CascadeType.MERGE, CascadeType.PERSIST))
-            @JoinColumn(name = "party_id")
+            @OneToOne(cascade = arrayOf(CascadeType.ALL))
             var issuerParty: CommonSchemaV1.Party,
 
             @Column(name = "issuer_reference")
             var issuerRef: ByteArray
 
     ) : PersistentState() {
-        constructor(_owner: AbstractParty, _exitKeys: Collection<PublicKey>, _quantity: Long, _issuerParty: AbstractParty, _issuerRef: OpaqueBytes, _participants: List<AbstractParty>) :
+        constructor(_owner: AbstractParty, _quantity: Long, _issuerParty: AbstractParty, _issuerRef: OpaqueBytes, _participants: List<AbstractParty>) :
                 this(owner = CommonSchemaV1.Party(_owner),
-//                     exitKeys = _exitKeys.map { CommonSchemaV1.Party(AnonymousParty(it)) }.toSet(),
                      quantity = _quantity,
                      issuerParty = CommonSchemaV1.Party(_issuerParty),
                      issuerRef = _issuerRef.bytes,

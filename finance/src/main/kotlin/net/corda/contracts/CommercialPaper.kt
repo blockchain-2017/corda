@@ -101,9 +101,10 @@ class CommercialPaper : Contract {
                         faceValueIssuerRef = this.faceValue.token.issuer.reference.bytes
                 )
                 is CommercialPaperSchemaV2 -> CommercialPaperSchemaV2.PersistentCommercialPaperState(
+                        _participants = this.participants.toSet(),
                         _issuerParty = this.issuance.party,
                         _issuerRef = this.issuance.reference.bytes,
-                        _owner = this.owner.owningKey,
+                        _owner = this.owner,
                         maturity = this.maturityDate,
                         _quantity = this.faceValue.quantity,
                         currency = this.faceValue.token.product.currencyCode,
