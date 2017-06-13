@@ -62,7 +62,7 @@ class ContractUpgradeFlow<OldState : ContractState, out NewState : ContractState
         val baseTx = assembleBareTx(originalState, modification)
         val participantKeys = originalState.state.data.participants.map { it.owningKey }.toSet()
         // TODO: We need a much faster way of finding our key in the transaction
-        val myKey = serviceHub.keyManagementService.keys.single { it in participantKeys }
+        val myKey = serviceHub.keyManagementService.filterMyKeys(participantKeys).single()
         val stx = serviceHub.signInitialTransaction(baseTx, myKey)
         return AbstractStateReplacementFlow.UpgradeTx(stx, participantKeys, myKey)
     }

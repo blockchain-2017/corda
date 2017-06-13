@@ -19,13 +19,11 @@ import net.corda.core.contracts.Amount
 import net.corda.core.contracts.GBP
 import net.corda.core.contracts.USD
 import net.corda.core.failure
-import net.corda.core.identity.Party
 import net.corda.core.messaging.FlowHandle
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.node.services.ServiceType
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.success
-import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.ALICE
 import net.corda.core.utilities.BOB
 import net.corda.core.utilities.DUMMY_NOTARY
@@ -220,7 +218,7 @@ fun main(args: Array<String>) {
 
             val maxIterations = 100_000
             // Log to logger when flow finish.
-            fun FlowHandle<Pair<SignedTransaction, Map<Party, AnonymisedIdentity>>>.log(seq: Int, name: String) {
+            fun FlowHandle<AbstractCashFlow.Result>.log(seq: Int, name: String) {
                 val out = "[$seq] $name $id :"
                 returnValue.success {
                     val (stx, idenities) = it

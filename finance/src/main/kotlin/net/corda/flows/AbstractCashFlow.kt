@@ -28,6 +28,15 @@ abstract class AbstractCashFlow<T>(override val progressTracker: ProgressTracker
             throw CashException(message, e)
         }
     }
+
+    /**
+     * Combined signed transaction and identity lookup map, which is the resulting data from regular cash flows.
+     * Specialised flows for unit tests differ from this.
+     *
+     * @param stx the signed transaction.
+     * @param identities a mapping from the original identities of the parties to the anonymised equivalents.
+     */
+    data class Result(val stx: SignedTransaction, val identities: Map<Party, AnonymisedIdentity>)
 }
 
 class CashException(message: String, cause: Throwable) : FlowException(message, cause)

@@ -6,7 +6,6 @@ import net.corda.core.contracts.InsufficientBalanceException
 import net.corda.core.contracts.TransactionType
 import net.corda.core.flows.StartableByRPC
 import net.corda.core.identity.Party
-import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
 import java.util.*
@@ -23,12 +22,12 @@ open class CashPaymentFlow(
         val amount: Amount<Currency>,
         val recipient: Party,
         progressTracker: ProgressTracker,
-        val issuerConstraint: Set<Party>? = null) : AbstractCashFlow<Pair<SignedTransaction, Map<Party, AnonymisedIdentity>>>(progressTracker) {
+        val issuerConstraint: Set<Party>? = null) : AbstractCashFlow<AbstractCashFlow.Result>(progressTracker) {
     /** A straightforward constructor that constructs spends using cash states of any issuer. */
     constructor(amount: Amount<Currency>, recipient: Party) : this(amount, recipient, tracker())
 
     @Suspendable
-    override fun call(): Pair<SignedTransaction, Map<Party, AnonymisedIdentity>> {
+    override fun call(): AbstractCashFlow.Result {
         progressTracker.currentStep = GENERATING_ID
         val txIdentities = subFlow(TxKeyFlow.Requester(recipient))
         val anonymousRecipient = txIdentities[recipient]!!.identity
@@ -50,6 +49,6 @@ open class CashPaymentFlow(
 
         progressTracker.currentStep = FINALISING_TX
         finaliseTx(setOf(recipient), tx, "Unable to notarise spend")
-        return Pair(tx, txIdentities)
+        return Result(tx, txIdentities)
     }
 }

@@ -11,6 +11,7 @@ import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.DEFAULT_SESSION_ID
+import net.corda.core.node.services.IdentityService
 import net.corda.core.node.services.NetworkMapCache.MapChange
 import net.corda.core.node.services.PartyInfo
 import net.corda.core.serialization.SingletonSerializeAsToken
@@ -38,7 +39,7 @@ import javax.annotation.concurrent.ThreadSafe
  * Extremely simple in-memory cache of the network map.
  */
 @ThreadSafe
-open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCacheInternal {
+open class InMemoryNetworkMapCache(val identityService: IdentityService) : SingletonSerializeAsToken(), NetworkMapCacheInternal {
     companion object {
         val logger = loggerFor<InMemoryNetworkMapCache>()
     }
@@ -72,8 +73,8 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
     }
 
     override fun getNodeByLegalIdentityKey(identityKey: PublicKey): NodeInfo? = registeredNodes[identityKey]
-    override fun getNodeByLegalIdentity(services: ServiceHub, party: AbstractParty): NodeInfo? {
-        val wellKnownParty = services.identityService.partyFromAnonymous(party)
+    override fun getNodeByLegalIdentity(party: AbstractParty): NodeInfo? {
+        val wellKnownParty = identityService.partyFromAnonymous(party)
         return wellKnownParty?.let {
             getNodeByLegalIdentityKey(it.owningKey)
         }

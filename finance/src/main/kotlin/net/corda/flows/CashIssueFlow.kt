@@ -8,7 +8,6 @@ import net.corda.core.contracts.issuedBy
 import net.corda.core.flows.StartableByRPC
 import net.corda.core.identity.Party
 import net.corda.core.serialization.OpaqueBytes
-import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
 import java.util.*
@@ -26,14 +25,14 @@ class CashIssueFlow(val amount: Amount<Currency>,
                     val issueRef: OpaqueBytes,
                     val recipient: Party,
                     val notary: Party,
-                    progressTracker: ProgressTracker) : AbstractCashFlow<Pair<SignedTransaction, Map<Party, AnonymisedIdentity>>>(progressTracker) {
+                    progressTracker: ProgressTracker) : AbstractCashFlow<AbstractCashFlow.Result>(progressTracker) {
     constructor(amount: Amount<Currency>,
                 issueRef: OpaqueBytes,
                 recipient: Party,
                 notary: Party) : this(amount, issueRef, recipient, notary, tracker())
 
     @Suspendable
-    override fun call(): Pair<SignedTransaction, Map<Party, AnonymisedIdentity>> {
+    override fun call(): AbstractCashFlow.Result {
         progressTracker.currentStep = GENERATING_ID
         val txIdentities = subFlow(TxKeyFlow.Requester(recipient))
         val anonymousRecipient = txIdentities[recipient]!!.identity
@@ -45,6 +44,6 @@ class CashIssueFlow(val amount: Amount<Currency>,
         val tx = serviceHub.signInitialTransaction(builder, issuer.party.owningKey)
         progressTracker.currentStep = FINALISING_TX
         subFlow(FinalityFlow(tx))
-        return Pair(tx, txIdentities)
+        return Result(tx, txIdentities)
     }
 }

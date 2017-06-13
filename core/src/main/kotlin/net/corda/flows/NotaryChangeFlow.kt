@@ -41,7 +41,7 @@ class NotaryChangeFlow<out T : ContractState>(
         val stx = serviceHub.signInitialTransaction(tx)
         val participantKeys = participants.map { it.owningKey }
         // TODO: We need a much faster way of finding our key in the transaction
-        val myKey = serviceHub.keyManagementService.keys.single { it in participantKeys }
+        val myKey = serviceHub.keyManagementService.filterMyKeys(participantKeys).single()
 
         return AbstractStateReplacementFlow.UpgradeTx(stx, participantKeys, myKey)
     }

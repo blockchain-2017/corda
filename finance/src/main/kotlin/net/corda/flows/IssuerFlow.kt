@@ -30,15 +30,15 @@ object IssuerFlow {
     @InitiatingFlow
     @StartableByRPC
     class IssuanceRequester(val amount: Amount<Currency>, val issueToParty: Party, val issueToPartyRef: OpaqueBytes,
-                            val issuerBankParty: Party) : FlowLogic<Pair<SignedTransaction, Map<Party, AnonymisedIdentity>>>() {
+                            val issuerBankParty: Party) : FlowLogic<AbstractCashFlow.Result>() {
         @Suspendable
         @Throws(CashException::class)
-        override fun call(): Pair<SignedTransaction, Map<Party, AnonymisedIdentity>> {
+        override fun call(): AbstractCashFlow.Result {
             val issueRequest = IssuanceRequestState(amount, issueToParty, issueToPartyRef)
             val stxAndIdentity = sendAndReceive<Pair<SignedTransaction, AnonymisedIdentity>>(issuerBankParty, issueRequest).unwrap { it }
             val (stx, identity) = stxAndIdentity
             // TODO: Include anonymised identities
-            return Pair(stx, mapOf(Pair(issueToParty, identity)))
+            return AbstractCashFlow.Result(stx, mapOf(Pair(issueToParty, identity)))
         }
     }
 
@@ -72,14 +72,14 @@ object IssuerFlow {
             // TODO: parse request to determine Asset to issue
             val txn = issueCashTo(issueRequest.amount, issueRequest.issueToParty, issueRequest.issuerPartyRef)
             progressTracker.currentStep = SENDING_CONFIRM
-            send(otherParty, Pair(txn.first, txn.second[issueRequest.issueToParty]))
-            return txn.first
+            send(otherParty, Pair(txn.stx, txn.identities[issueRequest.issueToParty]))
+            return txn.stx
         }
 
         @Suspendable
         private fun issueCashTo(amount: Amount<Currency>,
                                 issueTo: AbstractParty,
-                                issuerPartyRef: OpaqueBytes): Pair<SignedTransaction, Map<Party, AnonymisedIdentity>> {
+                                issuerPartyRef: OpaqueBytes): AbstractCashFlow.Result {
             // TODO: pass notary in as request parameter
             val notaryParty = serviceHub.networkMapCache.notaryNodes[0].notaryIdentity
             // invoke Cash subflow to issue Asset

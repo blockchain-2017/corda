@@ -234,7 +234,7 @@ class ForeignExchangeRemoteFlow(val source: Party) : FlowLogic<Unit>() {
 
         // Send back our proposed states and await the full transaction to verify
         val ourKeys = serviceHub.keyManagementService.keys
-        val ourKey = ourResponse.inputs.flatMap { it.state.data.participants }.map { it.owningKey }.single { it in ourKeys }
+        val ourKey = serviceHub.keyManagementService.filterMyKeys(ourResponse.inputs.flatMap { it.state.data.participants }.map { it.owningKey }).single()
         val proposedTrade = sendAndReceive<SignedTransaction>(source, ourResponse).unwrap {
             val wtx = it.tx
             // check all signatures are present except our own and the notary

@@ -69,12 +69,11 @@ interface NetworkMapCache {
      * is anonymised and the well known party cannot be resolved, it is impossible ot identify the node and therefore this
      * returns null.
      *
-     * @param services service hub for access to the identity service for deanonymisation.
      * @param party party to retrieve node information for.
      * @return the node for the identity, or null if the node could not be found. This does not necessarily mean there is
      * no node for the party, only that this cache is unaware of it.
      */
-    fun getNodeByLegalIdentity(services: ServiceHub, party: AbstractParty): NodeInfo?
+    fun getNodeByLegalIdentity(party: AbstractParty): NodeInfo?
 
     /** Look up the node info for a legal name. */
     fun getNodeByLegalName(principal: X500Name): NodeInfo? = partyNodes.singleOrNull { it.legalIdentity.name == principal }
