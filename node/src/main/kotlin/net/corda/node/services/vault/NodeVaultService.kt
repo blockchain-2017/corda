@@ -30,13 +30,9 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.transactions.WireTransaction
 import net.corda.core.utilities.loggerFor
 import net.corda.core.utilities.trace
-import net.corda.node.services.Models
 import net.corda.node.services.database.RequeryConfiguration
 import net.corda.node.services.statemachine.FlowStateMachineImpl
-import net.corda.node.services.vault.schemas.requery.VaultCashBalancesEntity
-import net.corda.node.services.vault.schemas.requery.VaultSchema
-import net.corda.node.services.vault.schemas.requery.VaultStatesEntity
-import net.corda.node.services.vault.schemas.requery.VaultTxnNoteEntity
+import net.corda.node.services.vault.schemas.requery.*
 import net.corda.node.utilities.bufferUntilDatabaseCommit
 import net.corda.node.utilities.wrapWithDatabaseTransaction
 import rx.Observable

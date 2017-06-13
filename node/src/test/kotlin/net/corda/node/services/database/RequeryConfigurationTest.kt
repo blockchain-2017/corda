@@ -18,8 +18,8 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.WireTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_PUBKEY_1
-import net.corda.node.services.Models
 import net.corda.node.services.persistence.DBTransactionStorage
+import net.corda.node.services.vault.schemas.requery.Models
 import net.corda.node.services.vault.schemas.requery.VaultCashBalancesEntity
 import net.corda.node.services.vault.schemas.requery.VaultSchema
 import net.corda.node.services.vault.schemas.requery.VaultStatesEntity
@@ -140,12 +140,10 @@ class RequeryConfigurationTest {
         database.transaction {
             requerySession.withTransaction {
                 // Note: cannot specify a limit explicitly when using iterator skip & take
-                val query = select(VaultSchema.VaultStates::class) //limit 50
+                val query = select(VaultSchema.VaultStates::class)
                 val count = query.get().count()
-//                Assertions.assertThat(count).isEqualTo(50)
                 Assertions.assertThat(count).isEqualTo(100)
                 val result = query.get().iterator(40, 5)
-//                result.asSequence().iterator().forEach { println(it.index) }
                 Assertions.assertThat(result.asSequence().count()).isEqualTo(5)
             }
         }
