@@ -35,6 +35,15 @@ abstract class AbstractStateReplacementFlow {
     data class Proposal<out M>(val stateRef: StateRef, val modification: M, val stx: SignedTransaction)
 
     /**
+     * The assembled transaction for upgrading a contract.
+     *
+     * @param stx signed transaction to do the upgrade.
+     * @param participants the parties involved in the upgrade transaction.
+     * @param myKey key
+     */
+    data class UpgradeTx(val stx: SignedTransaction, val participants: Iterable<PublicKey>, val myKey: PublicKey)
+
+    /**
      * The [Instigator] assembles the transaction for state replacement and sends out change proposals to all participants
      * ([Acceptor]) of that state. If participants agree to the proposed change, they each sign the transaction.
      * Finally, [Instigator] sends the transaction containing all participants' signatures to the notary for signature, and
@@ -79,7 +88,7 @@ abstract class AbstractStateReplacementFlow {
          * @return a triple of the transaction, the public keys of all participants, and the participating public key of
          * this node.
          */
-        abstract protected fun assembleTx(): Triple<SignedTransaction, Iterable<PublicKey>, PublicKey>
+        abstract protected fun assembleTx(): UpgradeTx
 
         @Suspendable
         private fun collectSignatures(participants: Iterable<PublicKey>, stx: SignedTransaction): List<DigitalSignature.WithKey> {

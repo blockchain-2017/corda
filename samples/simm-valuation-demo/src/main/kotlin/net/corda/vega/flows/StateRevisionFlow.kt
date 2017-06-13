@@ -17,7 +17,7 @@ import java.security.PublicKey
 object StateRevisionFlow {
     class Requester<T>(curStateRef: StateAndRef<RevisionedState<T>>,
                        updatedData: T) : AbstractStateReplacementFlow.Instigator<RevisionedState<T>, RevisionedState<T>, T>(curStateRef, updatedData) {
-        override fun assembleTx(): Triple<SignedTransaction, List<PublicKey>, PublicKey> {
+        override fun assembleTx(): AbstractStateReplacementFlow.UpgradeTx {
             val state = originalState.state.data
             val tx = state.generateRevision(originalState.state.notary, originalState, modification)
             tx.addTimeWindow(serviceHub.clock.instant(), 30.seconds)
@@ -26,7 +26,7 @@ object StateRevisionFlow {
             val participantKeys = state.participants.map { it.owningKey }
             // TODO: We need a much faster way of finding our key in the transaction
             val myKey = serviceHub.keyManagementService.keys.single { participantKeys.contains(it) }
-            return Triple(stx, participantKeys, serviceHub.legalIdentityKey)
+            return AbstractStateReplacementFlow.UpgradeTx(stx, participantKeys, myKey)
         }
     }
 

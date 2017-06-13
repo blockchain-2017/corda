@@ -58,12 +58,12 @@ class ContractUpgradeFlow<OldState : ContractState, out NewState : ContractState
         }
     }
 
-    override fun assembleTx(): Triple<SignedTransaction, Iterable<PublicKey>, PublicKey> {
+    override fun assembleTx(): AbstractStateReplacementFlow.UpgradeTx {
         val baseTx = assembleBareTx(originalState, modification)
         val participantKeys = originalState.state.data.participants.map { it.owningKey }.toSet()
         // TODO: We need a much faster way of finding our key in the transaction
         val myKey = serviceHub.keyManagementService.keys.single { it in participantKeys }
         val stx = serviceHub.signInitialTransaction(baseTx, myKey)
-        return Triple(stx, participantKeys, myKey)
+        return AbstractStateReplacementFlow.UpgradeTx(stx, participantKeys, myKey)
     }
 }

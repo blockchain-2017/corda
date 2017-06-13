@@ -25,7 +25,7 @@ class NotaryChangeFlow<out T : ContractState>(
         progressTracker: ProgressTracker = tracker())
     : AbstractStateReplacementFlow.Instigator<T, T, Party>(originalState, newNotary, progressTracker) {
 
-    override fun assembleTx(): Triple<SignedTransaction, List<PublicKey>, PublicKey> {
+    override fun assembleTx(): AbstractStateReplacementFlow.UpgradeTx {
         val state = originalState.state
         val tx = TransactionType.NotaryChange.Builder(originalState.state.notary)
 
@@ -43,7 +43,7 @@ class NotaryChangeFlow<out T : ContractState>(
         // TODO: We need a much faster way of finding our key in the transaction
         val myKey = serviceHub.keyManagementService.keys.single { it in participantKeys }
 
-        return Triple(stx, participantKeys, myKey)
+        return AbstractStateReplacementFlow.UpgradeTx(stx, participantKeys, myKey)
     }
 
     /**

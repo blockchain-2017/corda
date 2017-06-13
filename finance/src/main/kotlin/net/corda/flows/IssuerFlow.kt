@@ -3,6 +3,7 @@ package net.corda.flows
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.*
 import net.corda.core.flows.*
+import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.Party
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.serialization.OpaqueBytes
@@ -34,9 +35,10 @@ object IssuerFlow {
         @Throws(CashException::class)
         override fun call(): Pair<SignedTransaction, Map<Party, AnonymisedIdentity>> {
             val issueRequest = IssuanceRequestState(amount, issueToParty, issueToPartyRef)
-            val stx = sendAndReceive<SignedTransaction>(issuerBankParty, issueRequest).unwrap { it }
+            val stxAndIdentity = sendAndReceive<Pair<SignedTransaction, AnonymisedIdentity>>(issuerBankParty, issueRequest).unwrap { it }
+            val (stx, identity) = stxAndIdentity
             // TODO: Include anonymised identities
-            return Pair(stx, emptyMap())
+            return Pair(stx, mapOf(Pair(issueToParty, identity)))
         }
     }
 
@@ -70,14 +72,14 @@ object IssuerFlow {
             // TODO: parse request to determine Asset to issue
             val txn = issueCashTo(issueRequest.amount, issueRequest.issueToParty, issueRequest.issuerPartyRef)
             progressTracker.currentStep = SENDING_CONFIRM
-            send(otherParty, txn)
-            return txn
+            send(otherParty, Pair(txn.first, txn.second[issueRequest.issueToParty]))
+            return txn.first
         }
 
         @Suspendable
         private fun issueCashTo(amount: Amount<Currency>,
-                                issueTo: Party,
-                                issuerPartyRef: OpaqueBytes): SignedTransaction {
+                                issueTo: AbstractParty,
+                                issuerPartyRef: OpaqueBytes): Pair<SignedTransaction, Map<Party, AnonymisedIdentity>> {
             // TODO: pass notary in as request parameter
             val notaryParty = serviceHub.networkMapCache.notaryNodes[0].notaryIdentity
             // invoke Cash subflow to issue Asset
@@ -88,13 +90,13 @@ object IssuerFlow {
             // NOTE: issueCashFlow performs a Broadcast (which stores a local copy of the txn to the ledger)
             // short-circuit when issuing to self
             if (issueTo == serviceHub.myInfo.legalIdentity)
-                return issueTx.first
+                return issueTx
             // now invoke Cash subflow to Move issued assetType to issue requester
             progressTracker.currentStep = TRANSFERRING
-            val moveCashFlow = CashPaymentFlow(amount, issueTo)
+            val moveCashFlow = CashPaymentFlow(amount, this.otherParty)
             val moveTx = subFlow(moveCashFlow)
             // NOTE: CashFlow PayCash calls FinalityFlow which performs a Broadcast (which stores a local copy of the txn to the ledger)
-            return moveTx.first
+            return moveTx
         }
     }
 }
