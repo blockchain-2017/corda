@@ -29,12 +29,14 @@ object IssuerFlow {
     @InitiatingFlow
     @StartableByRPC
     class IssuanceRequester(val amount: Amount<Currency>, val issueToParty: Party, val issueToPartyRef: OpaqueBytes,
-                            val issuerBankParty: Party) : FlowLogic<SignedTransaction>() {
+                            val issuerBankParty: Party) : FlowLogic<Pair<SignedTransaction, Map<Party, AnonymisedIdentity>>>() {
         @Suspendable
         @Throws(CashException::class)
-        override fun call(): SignedTransaction {
+        override fun call(): Pair<SignedTransaction, Map<Party, AnonymisedIdentity>> {
             val issueRequest = IssuanceRequestState(amount, issueToParty, issueToPartyRef)
-            return sendAndReceive<SignedTransaction>(issuerBankParty, issueRequest).unwrap { it }
+            val stx = sendAndReceive<SignedTransaction>(issuerBankParty, issueRequest).unwrap { it }
+            // TODO: Include anonymised identities
+            return Pair(stx, emptyMap())
         }
     }
 

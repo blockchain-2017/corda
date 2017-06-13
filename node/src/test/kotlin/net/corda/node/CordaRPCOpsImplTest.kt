@@ -15,8 +15,8 @@ import net.corda.core.node.services.Vault
 import net.corda.core.node.services.unconsumedStates
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
-import net.corda.flows.CashIssueFlow
-import net.corda.flows.CashPaymentFlow
+import net.corda.flows.SimplifiedCashIssueFlow
+import net.corda.flows.SimplifiedCashPaymentFlow
 import net.corda.node.internal.CordaRPCOpsImpl
 import net.corda.node.services.messaging.CURRENT_RPC_CONTEXT
 import net.corda.node.services.messaging.RpcContext
@@ -64,8 +64,8 @@ class CordaRPCOpsImplTest {
         notaryNode = mockNet.createNode(advertisedServices = ServiceInfo(SimpleNotaryService.type), networkMapAddress = networkMap.info.address)
         rpc = CordaRPCOpsImpl(aliceNode.services, aliceNode.smm, aliceNode.database)
         CURRENT_RPC_CONTEXT.set(RpcContext(User("user", "pwd", permissions = setOf(
-                startFlowPermission<CashIssueFlow>(),
-                startFlowPermission<CashPaymentFlow>()
+                startFlowPermission<SimplifiedCashIssueFlow>(),
+                startFlowPermission<SimplifiedCashPaymentFlow>()
         ))))
 
         aliceNode.database.transaction {
@@ -87,34 +87,27 @@ class CordaRPCOpsImplTest {
 
         // Tell the monitoring service node to issue some cash
         val recipient = aliceNode.info.legalIdentity
-        val result = rpc.startFlow(::CashIssueFlow, Amount(quantity, GBP), ref, recipient, notaryNode.info.notaryIdentity)
+        val result = rpc.startFlow(::SimplifiedCashIssueFlow, Amount(quantity, GBP), ref, recipient, notaryNode.info.notaryIdentity)
         mockNet.runNetwork()
 
         var issueSmId: StateMachineRunId? = null
-        var txFlowSmId: StateMachineRunId? = null
         stateMachineUpdates.expectEvents {
             sequence(
                     // ISSUE
                     expect { add: StateMachineUpdate.Added ->
                         issueSmId = add.id
                     },
-                    expect { add: StateMachineUpdate.Added ->
-                        txFlowSmId = add.id
-                    },
                     expect { remove: StateMachineUpdate.Removed ->
                         require(remove.id == issueSmId)
-                    },
-                    expect { remove: StateMachineUpdate.Removed ->
-                        require(remove.id == txFlowSmId)
                     }
             )
         }
 
-        val (tx, identities) = result.returnValue.getOrThrow()
+        val tx = result.returnValue.getOrThrow()
 
         val expectedState = Cash.State(Amount(quantity,
                 Issued(aliceNode.info.legalIdentity.ref(ref), GBP)),
-                identities[recipient]!!.identity)
+                recipient)
         transactions.expectEvents {
             expect { tx ->
                 assertEquals(expectedState, tx.tx.outputs.single().data)
@@ -131,7 +124,7 @@ class CordaRPCOpsImplTest {
 
     @Test
     fun `issue and move`() {
-        val result = rpc.startFlow(::CashIssueFlow,
+        val result = rpc.startFlow(::SimplifiedCashIssueFlow,
                 Amount(100, USD),
                 OpaqueBytes(ByteArray(1, { 1 })),
                 aliceNode.info.legalIdentity,
@@ -140,13 +133,11 @@ class CordaRPCOpsImplTest {
 
         mockNet.runNetwork()
 
-        rpc.startFlow(::CashPaymentFlow, Amount(100, USD), aliceNode.info.legalIdentity)
+        rpc.startFlow(::SimplifiedCashPaymentFlow, Amount(100, USD), aliceNode.info.legalIdentity)
 
         mockNet.runNetwork()
 
         var issueSmId: StateMachineRunId? = null
-        var txIssueFlowSmId: StateMachineRunId? = null
-        var txMoveFlowSmId: StateMachineRunId? = null
         var moveSmId: StateMachineRunId? = null
         stateMachineUpdates.expectEvents() {
             sequence(
@@ -154,24 +145,12 @@ class CordaRPCOpsImplTest {
                     expect { add: StateMachineUpdate.Added ->
                         issueSmId = add.id
                     },
-                    expect { add: StateMachineUpdate.Added ->
-                        txIssueFlowSmId = add.id
-                    },
                     expect { remove: StateMachineUpdate.Removed ->
                         require(remove.id == issueSmId)
-                    },
-                    expect { remove: StateMachineUpdate.Removed ->
-                        require(remove.id == txIssueFlowSmId)
                     },
                     // MOVE
                     expect { add: StateMachineUpdate.Added ->
                         moveSmId = add.id
-                    },
-                    expect { add: StateMachineUpdate.Added ->
-                        txMoveFlowSmId = add.id
-                    },
-                    expect { remove: StateMachineUpdate.Removed ->
-                        require(remove.id == txMoveFlowSmId)
                     },
                     expect { remove: StateMachineUpdate.Removed ->
                         require(remove.id == moveSmId)
@@ -179,7 +158,7 @@ class CordaRPCOpsImplTest {
             )
         }
 
-        val (tx, identities) = result.returnValue.getOrThrow()
+        val tx = result.returnValue.getOrThrow()
         transactions.expectEvents {
             sequence(
                     // ISSUE
@@ -198,7 +177,7 @@ class CordaRPCOpsImplTest {
                         require(stx.tx.outputs.size == 1)
                         val signaturePubKeys = stx.sigs.map { it.by }.toSet()
                         // Alice and Notary signed
-                        require(identities[aliceNode.info.legalIdentity]!!.identity.owningKey.isFulfilledBy(signaturePubKeys))
+                        require(aliceNode.info.legalIdentity.owningKey.isFulfilledBy(signaturePubKeys))
                         require(notaryNode.info.notaryIdentity.owningKey.isFulfilledBy(signaturePubKeys))
                     }
             )
@@ -224,7 +203,7 @@ class CordaRPCOpsImplTest {
     fun `cash command by user not permissioned for cash`() {
         CURRENT_RPC_CONTEXT.set(RpcContext(User("user", "pwd", permissions = emptySet())))
         assertThatExceptionOfType(PermissionException::class.java).isThrownBy {
-            rpc.startFlow(::CashIssueFlow,
+            rpc.startFlow(::SimplifiedCashIssueFlow,
                     Amount(100, USD),
                     OpaqueBytes(ByteArray(1, { 1 })),
                     aliceNode.info.legalIdentity,

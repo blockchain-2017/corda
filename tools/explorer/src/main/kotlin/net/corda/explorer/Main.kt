@@ -18,8 +18,8 @@ import net.corda.contracts.asset.Cash
 import net.corda.core.contracts.Amount
 import net.corda.core.contracts.GBP
 import net.corda.core.contracts.USD
-import net.corda.core.crypto.X509Utilities
 import net.corda.core.failure
+import net.corda.core.identity.Party
 import net.corda.core.messaging.FlowHandle
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.node.services.ServiceType
@@ -34,10 +34,7 @@ import net.corda.explorer.model.CordaViewModel
 import net.corda.explorer.model.SettingsModel
 import net.corda.explorer.views.*
 import net.corda.explorer.views.cordapps.cash.CashViewer
-import net.corda.flows.CashExitFlow
-import net.corda.flows.CashFlowCommand
-import net.corda.flows.CashIssueFlow
-import net.corda.flows.CashPaymentFlow
+import net.corda.flows.*
 import net.corda.flows.IssuerFlow.IssuanceRequester
 import net.corda.testing.driver.PortAllocation
 import net.corda.testing.driver.driver
@@ -223,10 +220,11 @@ fun main(args: Array<String>) {
 
             val maxIterations = 100_000
             // Log to logger when flow finish.
-            fun FlowHandle<SignedTransaction>.log(seq: Int, name: String) {
+            fun FlowHandle<Pair<SignedTransaction, Map<Party, AnonymisedIdentity>>>.log(seq: Int, name: String) {
                 val out = "[$seq] $name $id :"
                 returnValue.success {
-                    Main.log.info("$out ${it.id} ${(it.tx.outputs.first().data as Cash.State).amount}")
+                    val (stx, idenities) = it
+                    Main.log.info("$out ${stx.id} ${(stx.tx.outputs.first().data as Cash.State).amount}")
                 }.failure {
                     Main.log.info("$out ${it.message}")
                 }

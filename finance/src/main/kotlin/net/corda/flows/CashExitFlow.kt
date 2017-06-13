@@ -22,16 +22,20 @@ import java.util.*
  * issuer.
  */
 @StartableByRPC
-class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, progressTracker: ProgressTracker) : AbstractCashFlow<SignedTransaction>(progressTracker) {
+class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, progressTracker: ProgressTracker) : AbstractCashFlow<Pair<SignedTransaction, Map<Party, AnonymisedIdentity>>>(progressTracker) {
     constructor(amount: Amount<Currency>, issueRef: OpaqueBytes) : this(amount, issueRef, tracker())
 
     companion object {
         fun tracker() = ProgressTracker(GENERATING_TX, SIGNING_TX, FINALISING_TX)
     }
 
+    /**
+     * @return the signed transaction, and a mapping of parties to new anonymous identities generated
+     * (for this flow this map is always empty).
+     */
     @Suspendable
     @Throws(CashException::class)
-    override fun call(): SignedTransaction {
+    override fun call(): Pair<SignedTransaction, Map<Party, AnonymisedIdentity>> {
         progressTracker.currentStep = GENERATING_TX
         val builder: TransactionBuilder = TransactionType.General.Builder(notary = null as Party?)
         val issuer = serviceHub.myInfo.legalIdentity.ref(issueRef)
@@ -67,6 +71,6 @@ class CashExitFlow(val amount: Amount<Currency>, val issueRef: OpaqueBytes, prog
         // Commit the transaction
         progressTracker.currentStep = FINALISING_TX
         finaliseTx(participants, tx, "Unable to notarise exit")
-        return tx
+        return Pair(tx, emptyMap())
     }
 }
