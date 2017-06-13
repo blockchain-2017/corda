@@ -111,11 +111,11 @@ class HibernateObserverTests {
         val observer = HibernateObserver(rawUpdatesPublisher, HibernateConfiguration(schemaService))
         database.transaction {
             rawUpdatesPublisher.onNext(Vault.Update(emptySet(), setOf(StateAndRef(TransactionState(TestState(), MEGA_CORP), StateRef(SecureHash.sha256("dummy"), 0)))))
-            val parentRowCountResult = TransactionManager.current().connection.prepareStatement("select count(*) from contract_Parents").executeQuery()
+            val parentRowCountResult = TransactionManager.current().connection.prepareStatement("select count(*) from Parents").executeQuery()
             parentRowCountResult.next()
             val parentRows = parentRowCountResult.getInt(1)
             parentRowCountResult.close()
-            val childrenRowCountResult = TransactionManager.current().connection.prepareStatement("select count(*) from contract_Children").executeQuery()
+            val childrenRowCountResult = TransactionManager.current().connection.prepareStatement("select count(*) from Children").executeQuery()
             childrenRowCountResult.next()
             val childrenRows = childrenRowCountResult.getInt(1)
             childrenRowCountResult.close()

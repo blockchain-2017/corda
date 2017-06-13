@@ -1,6 +1,7 @@
 package net.corda.node.services.database
 
 import net.corda.core.schemas.MappedSchema
+import net.corda.core.utilities.debug
 import net.corda.core.utilities.loggerFor
 import net.corda.node.services.api.SchemaService
 import org.hibernate.SessionFactory
@@ -44,28 +45,6 @@ class HibernateConfiguration(val schemaService: SchemaService) {
 
     private fun makeSessionFactoryForSchema(schema: MappedSchema): SessionFactory {
         return makeSessionFactoryForSchemas(setOf(schema).iterator())
-//        logger.info("Creating session factory for schema $schema")
-//        val serviceRegistry = BootstrapServiceRegistryBuilder().build()
-//        val metadataSources = MetadataSources(serviceRegistry)
-//        // We set a connection provider as the auto schema generation requires it.  The auto schema generation will not
-//        // necessarily remain and would likely be replaced by something like Liquibase.  For now it is very convenient though.
-//        // TODO: replace auto schema generation as it isn't intended for production use, according to Hibernate docs.
-//        val config = Configuration(metadataSources).setProperty("hibernate.connection.provider_class", HibernateConfiguration.NodeDatabaseConnectionProvider::class.java.name)
-//                .setProperty("hibernate.hbm2ddl.auto", "update")
-//                .setProperty("hibernate.show_sql", "true")
-//                .setProperty("hibernate.format_sql", "true")
-//        val options = schemaService.schemaOptions[schema]
-//        val databaseSchema = options?.databaseSchema
-//        if (databaseSchema != null) {
-//            logger.debug { "Database schema = $databaseSchema" }
-//            config.setProperty("hibernate.default_schema", databaseSchema)
-//        }
-//        val tablePrefix = options?.tablePrefix ?: "contract_" // We always have this as the default for aesthetic reasons.
-//        logger.debug { "Table prefix = $tablePrefix" }
-//        schema.mappedTypes.forEach { config.addAnnotatedClass(it) }
-//        val sessionFactory = buildSessionFactory(config, metadataSources, tablePrefix)
-//        logger.info("Created session factory for schema $schema")
-//        return sessionFactory
     }
 
     private fun makeSessionFactoryForSchemas(schemas: Iterator<MappedSchema>): SessionFactory {
@@ -80,6 +59,7 @@ class HibernateConfiguration(val schemaService: SchemaService) {
                 .setProperty("hibernate.show_sql", "true")
                 .setProperty("hibernate.format_sql", "true")
         schemas.forEach { schema ->
+            // TODO: require mechanism to set schemaOptions (databaseSchema, tablePrefix) which are not global to session
             schema.mappedTypes.forEach { config.addAnnotatedClass(it) }
         }
         val sessionFactory = buildSessionFactory(config, metadataSources, "")
