@@ -20,10 +20,7 @@ import net.corda.core.crypto.toBase58String
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.Party
 import net.corda.core.node.ServiceHub
-import net.corda.core.node.services.StatesNotAvailableException
-import net.corda.core.node.services.Vault
-import net.corda.core.node.services.VaultService
-import net.corda.core.node.services.unconsumedStates
+import net.corda.core.node.services.*
 import net.corda.core.serialization.*
 import net.corda.core.tee
 import net.corda.core.transactions.TransactionBuilder
@@ -63,7 +60,7 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         val stateRefCompositeColumn: RowExpression = RowExpression.of(listOf(VaultStatesEntity.TX_ID, VaultStatesEntity.INDEX))
     }
 
-    val configuration = RequeryConfiguration(dataSourceProperties, true)
+    val configuration = RequeryConfiguration(dataSourceProperties)
     val session = configuration.sessionForModel(Models.VAULT)
 
     private class InnerState {
@@ -169,6 +166,9 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
 
     override val updates: Observable<Vault.Update>
         get() = mutex.locked { _updatesInDbTx }
+
+    override val updatesPublisher: PublishSubject<Vault.Update>
+        get() = mutex.locked { _updatesPublisher }
 
     override fun track(): Pair<Vault<ContractState>, Observable<Vault.Update>> {
         return mutex.locked {

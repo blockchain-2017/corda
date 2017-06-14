@@ -64,7 +64,7 @@ public class VaultQueryJavaTests {
             @Override
             public VaultQueryService getVaultQueryService() {
                 HibernateConfiguration hibernateConfig = new HibernateConfiguration(new NodeSchemaService());
-                return new HibernateVaultQueryImpl(hibernateConfig);
+                return new HibernateVaultQueryImpl(hibernateConfig, getVaultService().getUpdatesPublisher());
             }
 
             @Override

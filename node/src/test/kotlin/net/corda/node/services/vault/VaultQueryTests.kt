@@ -7,7 +7,6 @@ import net.corda.contracts.testing.*
 import net.corda.core.contracts.*
 import net.corda.core.crypto.entropyToKeyPair
 import net.corda.core.days
-import net.corda.core.identity.AnonymousParty
 import net.corda.core.identity.Party
 import net.corda.core.node.services.*
 import net.corda.core.node.services.vault.*
@@ -1466,6 +1465,36 @@ abstract class VaultQueryTests {
             val results = vaultQuerySvc.queryBy<LinearState>(externalIdCustomCriteria)
 
             assertThat(results.states).hasSize(2)
+        }
+    }
+
+    /**
+     * Dynamic trackBy() tests
+     */
+
+    @Test
+    fun trackCashStates() {
+
+        database.transaction {
+
+            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
+            services.fillWithSomeTestLinearStates(10)
+            services.fillWithSomeTestDeals(listOf("123", "456", "789"))
+
+            val criteria = VaultQueryCriteria()
+            val (snapshot, updates)  = vaultQuerySvc.trackBy<Cash.State>(criteria)
+
+            assertThat(snapshot.states).hasSize(3)
+            assertThat(snapshot.statesMetadata).hasSize(3)
+
+            // add more cash
+            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
+            // add another deal
+            services.fillWithSomeTestDeals(listOf("SAMPLE DEAL"))
+
+            updates?.subscribe { (consumed, produced, flowId) ->
+                println("Vault update>> $flowId, consumed [${consumed.size}], produced [${produced.size}]")
+            }
         }
     }
 

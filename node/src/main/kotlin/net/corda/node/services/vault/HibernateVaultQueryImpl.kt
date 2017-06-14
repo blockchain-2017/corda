@@ -27,7 +27,8 @@ import java.lang.Exception
 import javax.persistence.EntityManager
 
 
-class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : SingletonSerializeAsToken(), VaultQueryService {
+class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration,
+                              val updatesPublisher: PublishSubject<Vault.Update>) : SingletonSerializeAsToken(), VaultQueryService {
 
     companion object {
         val log = loggerFor<HibernateVaultQueryImpl>()
@@ -100,16 +101,13 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
         }
     }
 
-    private class InnerState {
-        val _updatesPublisher = PublishSubject.create<Vault.Update>()!!
-    }
-    private val mutex = ThreadBox(InnerState())
+    private val mutex = ThreadBox ({ updatesPublisher })
 
     @Throws(VaultQueryException::class)
     override fun <T : ContractState> _trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.PageAndUpdates<T> {
         return mutex.locked {
-            Vault.PageAndUpdates(_queryBy(criteria, paging, sorting, contractType),
-                              _updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
+            Vault.PageAndUpdates(_queryBy<T>(criteria, paging, sorting, contractType),
+                                 updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
         }
     }
 

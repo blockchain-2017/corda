@@ -23,6 +23,7 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.transactions.WireTransaction
 import org.bouncycastle.cert.X509CertificateHolder
 import rx.Observable
+import rx.subjects.PublishSubject
 import java.io.InputStream
 import java.security.PublicKey
 import java.security.cert.CertPath
@@ -160,6 +161,11 @@ interface VaultService {
      * the update, and the database transaction associated with the update will have been committed and closed.
      */
     val updates: Observable<Vault.Update>
+
+    /**
+     * Enable creation of observables of updates.
+     */
+    val updatesPublisher: PublishSubject<Vault.Update>
 
     /**
      * Returns a map of how much cash we have in each currency, ignoring details like issuer. Note: currencies for

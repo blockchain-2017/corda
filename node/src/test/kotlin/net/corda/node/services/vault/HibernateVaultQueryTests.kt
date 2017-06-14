@@ -39,7 +39,7 @@ class HibernateVaultQueryTests : VaultQueryTests() {
                     // Refactored to use notifyAll() as we have no other unit test for that method with multiple transactions.
                     vaultService.notifyAll(txs.map { it.tx })
                 }
-                override val vaultQueryService : VaultQueryService = HibernateVaultQueryImpl(hibernateConfig)
+                override val vaultQueryService : VaultQueryService = HibernateVaultQueryImpl(hibernateConfig, vaultService.updatesPublisher)
             }
         }
     }
