@@ -15,13 +15,13 @@ import javax.persistence.Table
  * Second version of a cash contract ORM schema that extends the common
  * [VaultFungibleState] abstract schema
  */
-object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSchema.javaClass, version = 1, mappedTypes = listOf(PersistentCommercialPaperState::class.java, CommonSchemaV1.Party::class.java)) {
+object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSchema.javaClass, version = 1,
+                                              mappedTypes = listOf(PersistentCommercialPaperState::class.java, CommonSchemaV1.Party::class.java)) {
     @Entity
     @Table(name = "cp_states_v2",
            indexes = arrayOf(Index(name = "ccy_code_index2", columnList = "ccy_code"),
                              Index(name = "maturity_index2", columnList = "maturity_instant")))
     class PersistentCommercialPaperState(
-
             @Column(name = "maturity_instant")
             var maturity: Instant,
 
@@ -34,6 +34,7 @@ object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSche
             @Column(name = "face_value_issuer_ref")
             var faceValueIssuerRef: ByteArray,
 
+            /** parent attributes */
             @Transient
             val _participants: Set<AbstractParty>,
             @Transient
@@ -45,6 +46,5 @@ object CommercialPaperSchemaV2 : MappedSchema(schemaFamily = CommercialPaperSche
             val _issuerParty: AbstractParty,
             @Transient
             val _issuerRef: ByteArray
-
     ) : CommonSchemaV1.FungibleState(_participants, _owner, _quantity, _issuerParty, _issuerRef)
 }

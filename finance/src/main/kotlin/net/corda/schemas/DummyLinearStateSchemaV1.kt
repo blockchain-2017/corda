@@ -20,15 +20,13 @@ object DummyLinearStateSchema
  */
 object DummyLinearStateSchemaV1 : MappedSchema(schemaFamily = DummyLinearStateSchema.javaClass, version = 1, mappedTypes = listOf(PersistentDummyLinearState::class.java)) {
     @Entity
-    @Table(name = "dummy_linear_states")
-//            indexes = arrayOf(Index(name = "external_id_idx", columnList = "external_id"),
-//                              Index(name = "uuid_idx", columnList = "uuid")))
+    @Table(name = "dummy_linear_states",
+           indexes = arrayOf(Index(name = "external_id_idx", columnList = "external_id"),
+                             Index(name = "uuid_idx", columnList = "uuid")))
     class PersistentDummyLinearState(
-
             /**
              * UniqueIdentifier
              */
-
             @Column(name = "external_id")
             var externalId: String?,
 
@@ -38,7 +36,6 @@ object DummyLinearStateSchemaV1 : MappedSchema(schemaFamily = DummyLinearStateSc
             /**
              *  Dummy attributes
              */
-
             @Column(name = "linear_string")
             var linearString: String,
 

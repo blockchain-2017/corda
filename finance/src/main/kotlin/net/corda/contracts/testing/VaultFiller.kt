@@ -22,13 +22,13 @@ import java.util.*
 @JvmOverloads
 fun ServiceHub.fillWithSomeTestDeals(dealIds: List<String>,
                                      participants: List<AbstractParty> = emptyList()) : Vault<DealState> {
-    val freshKey = keyManagementService.freshKey()
-    val recipient = AnonymousParty(freshKey)
+    val myKey: PublicKey = myInfo.legalIdentity.owningKey
+    val me = AnonymousParty(myKey)
 
     val transactions: List<SignedTransaction> = dealIds.map {
         // Issue a deal state
         val dummyIssue = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-            addOutputState(DummyDealContract.State(ref = it, participants = participants.plus(recipient)))
+            addOutputState(DummyDealContract.State(ref = it, participants = participants.plus(me)))
             signWith(DUMMY_NOTARY_KEY)
         }
         return@map signInitialTransaction(dummyIssue)
@@ -48,13 +48,13 @@ fun ServiceHub.fillWithSomeTestDeals(dealIds: List<String>,
 fun ServiceHub.fillWithSomeTestLinearStates(numberToCreate: Int,
                                             externalId: String? = null,
                                             participants: List<AbstractParty> = emptyList()) : Vault<LinearState> {
-    val freshKey = keyManagementService.freshKey()
-    val recipient = AnonymousParty(freshKey)
+    val myKey: PublicKey = myInfo.legalIdentity.owningKey
+    val me = AnonymousParty(myKey)
 
     val transactions: List<SignedTransaction> = (1..numberToCreate).map {
         // Issue a Linear state
         val dummyIssue = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-            addOutputState(DummyLinearContract.State(linearId = UniqueIdentifier(externalId), participants = participants.plus(recipient)))
+            addOutputState(DummyLinearContract.State(linearId = UniqueIdentifier(externalId), participants = participants.plus(me)))
             signWith(DUMMY_NOTARY_KEY)
         }
 
@@ -122,7 +122,6 @@ fun ServiceHub.fillWithSomeTestCommodity(amount: Amount<Commodity>,
                                     ownedBy: AbstractParty? = null,
                                     issuedBy: PartyAndReference = DUMMY_OBLIGATION_ISSUER.ref(1),
                                     issuerKey: KeyPair = DUMMY_OBLIGATION_ISSUER_KEY): Vault<CommodityContract.State> {
-
     val myKey: PublicKey = ownedBy?.owningKey ?: myInfo.legalIdentity.owningKey
     val me = AnonymousParty(myKey)
 
@@ -166,7 +165,6 @@ fun calculateRandomlySizedAmounts(howMuch: Amount<Currency>, min: Int, max: Int,
 }
 
 fun <T : LinearState> ServiceHub.consume(states: List<StateAndRef<T>>) {
-
     // Create a txn consuming different contract types
     states.forEach {
         val consumedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
@@ -179,7 +177,6 @@ fun <T : LinearState> ServiceHub.consume(states: List<StateAndRef<T>>) {
 }
 
 fun <T : LinearState> ServiceHub.consumeAndProduce(stateAndRef: StateAndRef<T>): StateAndRef<T> {
-
     // Create a txn consuming different contract types
     val consumedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
         addInputState(stateAndRef)
@@ -190,7 +187,8 @@ fun <T : LinearState> ServiceHub.consumeAndProduce(stateAndRef: StateAndRef<T>):
 
     // Create a txn consuming different contract types
     val producedTx = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-        addOutputState(DummyLinearContract.State(linearId = stateAndRef.state.data.linearId))
+        addOutputState(DummyLinearContract.State(linearId = stateAndRef.state.data.linearId,
+                                                 participants = stateAndRef.state.data.participants))
         signWith(DUMMY_NOTARY_KEY)
     }.toSignedTransaction()
 
@@ -200,21 +198,18 @@ fun <T : LinearState> ServiceHub.consumeAndProduce(stateAndRef: StateAndRef<T>):
 }
 
 fun <T : LinearState> ServiceHub.consumeAndProduce(states: List<StateAndRef<T>>) {
-
     states.forEach {
         consumeAndProduce(it)
     }
 }
 
 fun ServiceHub.consumeDeals(dealStates: List<StateAndRef<DealState>>) = consume(dealStates)
-
 fun ServiceHub.consumeLinearStates(linearStates: List<StateAndRef<LinearState>>) = consume(linearStates)
 fun ServiceHub.evolveLinearStates(linearStates: List<StateAndRef<LinearState>>) = consumeAndProduce(linearStates)
 fun ServiceHub.evolveLinearState(linearState: StateAndRef<LinearState>) : StateAndRef<LinearState> = consumeAndProduce(linearState)
 
 @JvmOverloads
 fun ServiceHub.consumeCash(amount: Amount<Currency>, to: Party = CHARLIE) {
-
     // A tx that spends our money.
     val spendTX = TransactionType.General.Builder(DUMMY_NOTARY).apply {
         vaultService.generateSpend(this, amount, to)

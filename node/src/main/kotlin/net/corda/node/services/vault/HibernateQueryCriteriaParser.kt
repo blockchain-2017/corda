@@ -42,7 +42,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     private var rootEntities = mutableMapOf<Class<out PersistentState>, Root<*>>()
 
     override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) : Collection<Predicate> {
-
         log.trace { "Parsing VaultQueryCriteria: $criteria" }
         var predicateSet = mutableSetOf<Predicate>()
 
@@ -96,7 +95,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                         criteriaBuilder.and(parseOperator(timeOperator, vaultStates.get<Instant>("recordedTime"), timeValue))
                 })
         }
-
         return predicateSet
     }
 
@@ -116,7 +114,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) : Collection<Predicate> {
-
         log.trace { "Parsing FungibleAssetQueryCriteria: $criteria" }
 
         var predicateSet = mutableSetOf<Predicate>()
@@ -165,12 +162,10 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
             predicateSet.add(criteriaBuilder.and(joinFungibleStateToParty.get<CommonSchemaV1.Party>("name").`in`(participantKeys)))
             criteriaQuery.distinct(true)
         }
-
         return predicateSet
     }
 
     override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria) : Collection<Predicate> {
-
         log.trace { "Parsing LinearStateQueryCriteria: $criteria" }
 
         var predicateSet = mutableSetOf<Predicate>()
@@ -204,16 +199,13 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
             predicateSet.add(criteriaBuilder.and(joinLinearStateToParty.get<CommonSchemaV1.Party>("name").`in`(participantKeys)))
             criteriaQuery.distinct(true)
         }
-
         return predicateSet
     }
 
     override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): Collection<Predicate> {
-
         log.trace { "Parsing VaultCustomQueryCriteria: $criteria" }
 
         var predicateSet = mutableSetOf<Predicate>()
-
         val (entityClass, attributeName, attributeValue) = resolveKotlinOrJava(criteria.indexExpression)
 
         try {
@@ -248,13 +240,11 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
             }
             throw VaultQueryException("Parsing error: ${e.message}")
         }
-
         return predicateSet
     }
 
     // NOTE: limitation in generics prevents using single parser for Nullable (R?) and non-Nullable (R) attribute value types
     override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteriaNullable<L, R>): Collection<Predicate> {
-
         log.trace { "Parsing VaultCustomQueryCriteriaNullable: $criteria" }
 
         var predicateSet = mutableSetOf<Predicate>()
@@ -293,12 +283,10 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
             }
             throw VaultQueryException("Parsing error: ${e.message}")
         }
-
         return predicateSet
     }
 
     private fun resolveKotlinOrJava(expression: Logical<*, *>): Triple<Class<out PersistentState>, String, Any?> {
-
         val attribute = expression.leftOperand
 
         @SuppressWarnings("unchecked")
@@ -317,12 +305,10 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                     }
                     else -> throw VaultQueryException("Unrecognised attribute specified: $attribute")
                 }
-
         return attributeClazzNameAndValue
     }
 
     override fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
-
         log.trace { "Parsing OR QueryCriteria composition: $left OR $right" }
 
         var predicateSet = mutableSetOf<Predicate>()
@@ -336,7 +322,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     override fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
-
         log.trace { "Parsing AND QueryCriteria composition: $left AND $right" }
 
         var predicateSet = mutableSetOf<Predicate>()
@@ -350,7 +335,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     private fun <T : Comparable<T>> parseGenericOperator(operator: Operator, attribute: Path<out T>?, values: Collection<T>): Predicate? {
-
         check(values.size > 0) { "$operator expects at least one argument value [$values]"}
 
         @SuppressWarnings("unchecked")
@@ -372,7 +356,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     private fun <T : Comparable<T>> parseGenericOperator(operator: Operator, attribute: Path<out T>?, value: T): Predicate? {
-
         val predicate =
                 when (operator) {
                     Operator.EQUAL -> criteriaBuilder.equal(attribute, value)
@@ -409,7 +392,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     override fun parse(criteria: QueryCriteria) : Collection<Predicate> {
-
         val predicateSet = criteria.visit(this)
 
         val combinedPredicates = joinPredicates.plus(predicateSet)
@@ -419,7 +401,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     override fun parse(sorting: Sort) {
-
         log.trace { "Parsing sorting specification: $sorting" }
 
         var orderCriteria = mutableListOf<Order>()

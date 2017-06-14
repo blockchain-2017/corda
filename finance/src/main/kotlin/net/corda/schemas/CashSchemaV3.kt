@@ -13,11 +13,11 @@ import javax.persistence.*
  * First version of a cash contract ORM schema that maps all fields of the [Cash] contract state as it stood
  * at the time of writing.
  */
-object CashSchemaV3 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 3, mappedTypes = listOf(PersistentCashState::class.java, CommonSchemaV1.Party::class.java)) {
+object CashSchemaV3 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 3,
+                                   mappedTypes = listOf(PersistentCashState::class.java, CommonSchemaV1.Party::class.java)) {
     @Entity
     @Table(name = "cash_states_v3")
     class PersistentCashState(
-
             /** [ContractState] attributes */
             @OneToMany(cascade = arrayOf(CascadeType.ALL))
             var participants: Set<CommonSchemaV1.Party>,

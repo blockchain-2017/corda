@@ -20,12 +20,12 @@ object VaultSchema
 /**
  * First version of the Vault ORM schema
  */
-object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1, mappedTypes = listOf(VaultStates::class.java, VaultLinearStates::class.java, VaultFungibleStates::class.java,  CommonSchemaV1.Party::class.java)) {
+object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, version = 1,
+                                    mappedTypes = listOf(VaultStates::class.java, VaultLinearStates::class.java, VaultFungibleStates::class.java,  CommonSchemaV1.Party::class.java)) {
     @Entity
     @Table(name = "vault_states",
             indexes = arrayOf(Index(name = "state_status_idx", columnList = "state_status")))
     class VaultStates(
-
             /** refers to the notary a state is attached to */
             @Column(name = "notary_name")
             var notaryName: String,
@@ -62,7 +62,6 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             /** refers to the last time a lock was taken (reserved) or updated (released, re-reserved) */
             @Column(name = "lock_timestamp", nullable = true)
             var lockUpdateTime: Instant?
-
     ) : PersistentState()
 
     @Entity
@@ -71,7 +70,6 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
                               Index(name = "uuid_index", columnList = "uuid"),
                               Index(name = "deal_reference_index", columnList = "deal_reference")))
     class VaultLinearStates(
-
             /** [ContractState] attributes */
             @OneToMany(cascade = arrayOf(CascadeType.ALL))
             var participants: Set<CommonSchemaV1.Party>,
@@ -90,7 +88,6 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
             /** Deal State attributes **/
             @Column(name = "deal_reference")
             var dealReference: String
-
     ) : PersistentState() {
         constructor(uid: UniqueIdentifier, _dealReference: String, _participants: List<AbstractParty>) :
                 this(externalId = uid.externalId,
@@ -102,7 +99,6 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
     @Entity
     @Table(name = "vault_fungible_states")
     class VaultFungibleStates(
-
             /** [ContractState] attributes */
             @OneToMany(cascade = arrayOf(CascadeType.ALL))
             var participants: Set<CommonSchemaV1.Party>,
@@ -118,7 +114,6 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
              */
 
             /** Amount attributes */
-
             @Column(name = "quantity")
             var quantity: Long,
 
@@ -128,7 +123,6 @@ object VaultSchemaV1 : MappedSchema(schemaFamily = VaultSchema.javaClass, versio
 
             @Column(name = "issuer_reference")
             var issuerRef: ByteArray
-
     ) : PersistentState() {
         constructor(_owner: AbstractParty, _quantity: Long, _issuerParty: AbstractParty, _issuerRef: OpaqueBytes, _participants: List<AbstractParty>) :
                 this(owner = CommonSchemaV1.Party(_owner),

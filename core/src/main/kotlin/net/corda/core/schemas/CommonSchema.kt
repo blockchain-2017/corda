@@ -36,7 +36,6 @@ object CommonSchemaV1 : MappedSchema(schemaFamily = CommonSchema.javaClass, vers
 
     @MappedSuperclass
     open class FungibleState(
-
             /** [ContractState] attributes */
             @OneToMany(cascade = arrayOf(CascadeType.ALL))
             var participants: Set<CommonSchemaV1.Party>,
@@ -52,7 +51,6 @@ object CommonSchemaV1 : MappedSchema(schemaFamily = CommonSchema.javaClass, vers
              */
 
             /** Amount attributes */
-
             @Column(name = "quantity")
             var quantity: Long,
 
@@ -62,7 +60,6 @@ object CommonSchemaV1 : MappedSchema(schemaFamily = CommonSchema.javaClass, vers
 
             @Column(name = "issuer_reference")
             var issuerRef: ByteArray
-
     ) : PersistentState() {
         constructor(_participants: Set<AbstractParty>, _ownerKey: AbstractParty, _quantity: Long, _issuerParty: AbstractParty, _issuerRef: ByteArray)
                 : this(participants = _participants.map { CommonSchemaV1.Party(it) }.toSet(),
@@ -93,6 +90,7 @@ object CommonSchemaV1 : MappedSchema(schemaFamily = CommonSchema.javaClass, vers
             @Column(name = "party_key", length = 65535) // TODO What is the upper limit on size of CompositeKey?)
             var key: String
     ) {
-        constructor(party: net.corda.core.identity.AbstractParty) : this(0, party.nameOrNull()?.toString() ?: party.toString(), party.owningKey.toBase58String())
+        constructor(party: net.corda.core.identity.AbstractParty)
+                : this(0, party.nameOrNull()?.toString() ?: party.toString(), party.owningKey.toBase58String())
     }
 }

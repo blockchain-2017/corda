@@ -38,7 +38,6 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
 
     @Throws(VaultQueryException::class)
     override fun <T : ContractState> _queryBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.Page<T> {
-
         log.info("Vault Query for contract type: $contractType, criteria: $criteria, pagination: $paging, sorting: $sorting")
 
         val session = sessionFactory.withOptions().
@@ -108,7 +107,6 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
 
     @Throws(VaultQueryException::class)
     override fun <T : ContractState> _trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.PageAndUpdates<T> {
-
         return mutex.locked {
             Vault.PageAndUpdates(_queryBy(criteria, paging, sorting, contractType),
                               _updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
@@ -120,24 +118,23 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration) : Singlet
      * for usage in generic queries of type queryBy<LinearState> or queryBy<FungibleState<*>>
      */
     fun resolveUniqueContractStateTypes(session: EntityManager) : Map<String, List<String>> {
+        val criteria = criteriaBuilder.createQuery(String::class.java)
+        val vaultStates = criteria.from(VaultSchemaV1.VaultStates::class.java)
+        criteria.select(vaultStates.get("contractStateClassName")).distinct(true)
+        val query = session.createQuery(criteria)
+        val results = query.resultList
+        val distinctTypes = results.map { it }
 
-            val criteria = criteriaBuilder.createQuery(String::class.java)
-            val vaultStates = criteria.from(VaultSchemaV1.VaultStates::class.java)
-            criteria.select(vaultStates.get("contractStateClassName")).distinct(true)
-            val query = session.createQuery(criteria)
-            val results = query.resultList
-            val distinctTypes = results.map { it }
-
-            val contractInterfaceToConcreteTypes = mutableMapOf<String, MutableList<String>>()
-            distinctTypes.forEach { it ->
-                val concreteType = Class.forName(it) as Class<ContractState>
-                val contractInterfaces = deriveContractInterfaces(concreteType)
-                contractInterfaces.map {
-                    val contractInterface = contractInterfaceToConcreteTypes.getOrPut(it.name, { mutableListOf() })
-                    contractInterface.add(concreteType.name)
-                }
+        val contractInterfaceToConcreteTypes = mutableMapOf<String, MutableList<String>>()
+        distinctTypes.forEach { it ->
+            val concreteType = Class.forName(it) as Class<ContractState>
+            val contractInterfaces = deriveContractInterfaces(concreteType)
+            contractInterfaces.map {
+                val contractInterface = contractInterfaceToConcreteTypes.getOrPut(it.name, { mutableListOf() })
+                contractInterface.add(concreteType.name)
             }
-            return contractInterfaceToConcreteTypes
+        }
+        return contractInterfaceToConcreteTypes
     }
 
     private fun <T: ContractState> deriveContractInterfaces(clazz: Class<T>): Set<Class<T>> {

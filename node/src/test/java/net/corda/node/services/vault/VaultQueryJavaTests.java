@@ -48,7 +48,6 @@ public class VaultQueryJavaTests {
 
     @Before
     public void setUp() {
-
         Properties dataSourceProps = makeTestDataSourceProperties(SecureHash.randomSHA256().toString());
         Pair<Closeable, Database> dataSourceAndDatabase = configureDatabase(dataSourceProps);
         dataSource = dataSourceAndDatabase.getFirst();
@@ -167,7 +166,6 @@ public class VaultQueryJavaTests {
 
     @Test
     public void customQueryForCashStatesWithAmountOfCurrencyGreaterOrEqualThanQuantity() {
-
         transaction(database, tx -> {
 
             Amount<Currency> pounds = new Amount<>(100, Currency.getInstance("GBP"));
@@ -218,7 +216,6 @@ public class VaultQueryJavaTests {
 
     @Test
     public void trackCashStates() {
-
         transaction(database, tx -> {
             fillWithSomeTestCash(services,
                     new Amount<>(100, Currency.getInstance("USD")),

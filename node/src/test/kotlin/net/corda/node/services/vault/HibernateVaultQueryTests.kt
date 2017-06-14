@@ -20,7 +20,6 @@ import org.junit.Before
 import org.junit.Test
 
 class HibernateVaultQueryTests : VaultQueryTests() {
-
     @Before
     fun setUp() {
         val dataSourceProps = makeTestDataSourceProperties()

@@ -23,7 +23,6 @@ import kotlin.reflect.KMutableProperty1
  */
 @CordaSerializable
 sealed class QueryCriteria {
-
     abstract fun visit(parser: IQueryCriteriaParser): Collection<Predicate>
 
     /**
@@ -86,14 +85,12 @@ sealed class QueryCriteria {
      * Refer to [CommercialPaper.State] for a concrete example.
      */
     data class VaultCustomQueryCriteria<L: Any, R : Comparable<R>>(val indexExpression: Logical<KMutableProperty1<L,R>, out R>) : QueryCriteria() {
-
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseCriteria(this)
         }
     }
 
     data class VaultCustomQueryCriteriaNullable<L: Any, R : Comparable<R>>(val indexExpression: Logical<KMutableProperty1<L,R?>, out R>) : QueryCriteria() {
-
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseCriteria(this)
         }
@@ -101,7 +98,6 @@ sealed class QueryCriteria {
 
     // enable composition of [QueryCriteria]
     data class AndComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
-
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseAnd(this.a, this.b)
         }
@@ -129,7 +125,6 @@ interface IQueryCriteriaParser {
     fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): Collection<Predicate>
     fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
     fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
-
     fun parse(criteria: QueryCriteria) : Collection<Predicate>
     fun parse(sorting: Sort)
 }

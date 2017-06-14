@@ -126,7 +126,6 @@ class RequeryConfigurationTest {
 
     @Test
     fun `bounded iteration`() {
-
         // insert 100 entities
         database.transaction {
             requerySession.withTransaction {
@@ -151,7 +150,6 @@ class RequeryConfigurationTest {
 
     @Test
     fun `test calling an arbitrary JDBC native query`() {
-
         val txn = newTransaction()
 
         database.transaction {
