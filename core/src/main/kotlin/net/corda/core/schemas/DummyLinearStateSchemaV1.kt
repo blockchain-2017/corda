@@ -1,7 +1,5 @@
-package net.corda.schemas
+package net.corda.core.schemas
 
-import net.corda.core.schemas.MappedSchema
-import net.corda.core.schemas.PersistentState
 import java.time.Instant
 import java.util.*
 import javax.persistence.Column

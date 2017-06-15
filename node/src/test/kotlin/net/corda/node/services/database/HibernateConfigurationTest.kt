@@ -1,6 +1,7 @@
 package net.corda.node.services.database
 
 import net.corda.contracts.asset.Cash
+import net.corda.contracts.asset.DummyFungibleContract
 import net.corda.contracts.testing.consumeCash
 import net.corda.contracts.testing.fillWithSomeTestCash
 import net.corda.contracts.testing.fillWithSomeTestDeals
@@ -9,6 +10,8 @@ import net.corda.core.contracts.*
 import net.corda.core.crypto.toBase58String
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultService
+import net.corda.core.schemas.DummyLinearStateSchemaV1
+import net.corda.core.schemas.DummyLinearStateSchemaV2
 import net.corda.core.schemas.PersistentStateRef
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.storageKryo
@@ -17,13 +20,16 @@ import net.corda.core.utilities.ALICE
 import net.corda.core.utilities.BOB
 import net.corda.core.utilities.BOB_KEY
 import net.corda.core.utilities.DUMMY_NOTARY
+import net.corda.node.services.schema.HibernateObserver
 import net.corda.node.services.schema.NodeSchemaService
+import net.corda.node.services.vault.NodeVaultService
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
-import net.corda.schemas.*
-import net.corda.testing.ALICE_PUBKEY
+import net.corda.schemas.CashSchemaV1
+import net.corda.schemas.SampleCashSchemaV2
+import net.corda.schemas.SampleCashSchemaV3
 import net.corda.testing.BOB_PUBKEY
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
@@ -45,9 +51,11 @@ class HibernateConfigurationTest {
     lateinit var services: MockServices
     lateinit var dataSource: Closeable
     lateinit var database: Database
+    val vault: VaultService get() = services.vaultService
 
     // Hibernate configuration objects
     lateinit var hibernateConfig: HibernateConfiguration
+    lateinit var hibernatePersister: HibernateObserver
     lateinit var sessionFactory: SessionFactory
     lateinit var entityManager: EntityManager
     lateinit var criteriaBuilder: CriteriaBuilder
@@ -59,15 +67,20 @@ class HibernateConfigurationTest {
     fun setUp() {
         val dataSourceProps = makeTestDataSourceProperties()
         val dataSourceAndDatabase = configureDatabase(dataSourceProps)
+        val customSchemas = setOf(VaultSchemaV1, CashSchemaV1, SampleCashSchemaV2, SampleCashSchemaV3)
+
         dataSource = dataSourceAndDatabase.first
         database = dataSourceAndDatabase.second
         database.transaction {
 
-            hibernateConfig = HibernateConfiguration(NodeSchemaService())
+            hibernateConfig = HibernateConfiguration(NodeSchemaService(customSchemas))
 
             services = object : MockServices(BOB_KEY) {
-
-                override val vaultService: VaultService = makeVaultService(dataSourceProps, hibernateConfig)
+                override val vaultService: VaultService get() {
+                    val vaultService = NodeVaultService(this, dataSourceProps)
+                    hibernatePersister = HibernateObserver(vaultService.rawUpdates, hibernateConfig)
+                    return vaultService
+                }
 
                 override fun recordTransactions(txs: Iterable<SignedTransaction>) {
                     for (stx in txs) {
@@ -80,7 +93,7 @@ class HibernateConfigurationTest {
         }
         setUpDb()
 
-        sessionFactory = hibernateConfig.sessionFactoryForSchema(VaultSchemaV1)
+        sessionFactory = hibernateConfig.sessionFactoryForSchemas(*customSchemas.toTypedArray())
         entityManager = sessionFactory.createEntityManager()
         criteriaBuilder = sessionFactory.criteriaBuilder
     }
@@ -110,7 +123,6 @@ class HibernateConfigurationTest {
 
     @Test
     fun `consumed states`() {
-
         database.transaction {
             services.consumeCash(50.DOLLARS)
         }
@@ -130,7 +142,6 @@ class HibernateConfigurationTest {
 
     @Test
     fun `select by composite primary key`() {
-
         val issuedStates =
             database.transaction {
                 services.fillWithSomeTestLinearStates(8)
@@ -157,7 +168,6 @@ class HibernateConfigurationTest {
 
     @Test
     fun `distinct contract types`() {
-
         database.transaction {
             // add 2 more contract types
             services.fillWithSomeTestLinearStates(10)
@@ -178,7 +188,6 @@ class HibernateConfigurationTest {
 
     @Test
     fun `with sorting`() {
-
         // structure query
         val criteriaQuery = criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
         val vaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
@@ -196,7 +205,6 @@ class HibernateConfigurationTest {
 
     @Test
     fun `with pagination`() {
-
         // add 100 additional cash entries
         database.transaction {
             services.fillWithSomeTestCash(1000.POUNDS, DUMMY_NOTARY, 100, 100, Random(0L))
@@ -224,7 +232,6 @@ class HibernateConfigurationTest {
         val lastQueryResults = query.resultList
 
         Assertions.assertThat(lastQueryResults.size).isEqualTo(10)
-
     }
 
     /**
@@ -232,7 +239,6 @@ class HibernateConfigurationTest {
      */
     @Test
     fun `select by composite primary key on LinearStates`() {
-
         database.transaction {
             services.fillWithSomeTestLinearStates(10)
         }
@@ -262,11 +268,6 @@ class HibernateConfigurationTest {
      */
     @Test
     fun `count CashStates`() {
-
-        val sessionFactory = hibernateConfig.sessionFactoryForSchema(CashSchemaV1)
-        val entityManager = sessionFactory.createEntityManager()
-        val criteriaBuilder = entityManager.criteriaBuilder
-
         // structure query
         val countQuery = criteriaBuilder.createQuery(Long::class.java)
         countQuery.select(criteriaBuilder.count(countQuery.from(CashSchemaV1.PersistentCashState::class.java)))
@@ -279,7 +280,6 @@ class HibernateConfigurationTest {
 
     @Test
     fun `select by composite primary key on CashStates`() {
-
         // structure query
         val criteriaQuery = criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
         val vaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
@@ -294,13 +294,8 @@ class HibernateConfigurationTest {
 
     @Test
     fun `select and join by composite primary key on CashStates`() {
-
         database.transaction {
             services.fillWithSomeTestLinearStates(5)
-
-            val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CashSchemaV1)
-            val criteriaBuilder = sessionFactory.criteriaBuilder
-            val entityManager = sessionFactory.createEntityManager()
 
             // structure query
             val criteriaQuery = criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
@@ -323,14 +318,18 @@ class HibernateConfigurationTest {
      */
     @Test
     fun `count CashStates in V2`() {
-
-        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(CommonSchemaV1, CashSchemaV2)
-        val entityManager = sessionFactory.createEntityManager()
-        val criteriaBuilder = entityManager.criteriaBuilder
+        database.transaction {
+            // persist cash states explicitly with V2 schema
+            cashStates.forEach {
+                val cashState = it.state.data
+                val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV2)
+            }
+        }
 
         // structure query
         val countQuery = criteriaBuilder.createQuery(Long::class.java)
-        countQuery.select(criteriaBuilder.count(countQuery.from(CashSchemaV2.PersistentCashState::class.java)))
+        countQuery.select(criteriaBuilder.count(countQuery.from(SampleCashSchemaV2.PersistentCashState::class.java)))
 
         // execute query
         val countResult = entityManager.createQuery(countQuery).singleResult
@@ -340,19 +339,21 @@ class HibernateConfigurationTest {
 
     @Test
     fun `select by composite primary key on CashStates in V2`() {
-
         database.transaction {
             services.fillWithSomeTestLinearStates(5)
-        }
 
-        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CashSchemaV2)
-        val criteriaBuilder = sessionFactory.criteriaBuilder
-        val entityManager = sessionFactory.createEntityManager()
+            // persist cash states explicitly with V2 schema
+            cashStates.forEach {
+                val cashState = it.state.data
+                val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV2)
+            }
+        }
 
         // structure query
         val criteriaQuery = criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
         val vaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
-        val vaultCashStates = criteriaQuery.from(CashSchemaV2.PersistentCashState::class.java)
+        val vaultCashStates = criteriaQuery.from(SampleCashSchemaV2.PersistentCashState::class.java)
 
         criteriaQuery.select(vaultStates)
         criteriaQuery.where(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultCashStates.get<PersistentStateRef>("stateRef")))
@@ -376,7 +377,6 @@ class HibernateConfigurationTest {
      */
     @Test
     fun `select by composite primary between VaultStates, VaultLinearStates and DummyLinearStates`() {
-
         database.transaction {
             services.fillWithSomeTestLinearStates(8)
             services.fillWithSomeTestDeals(listOf("123", "456", "789"))
@@ -411,7 +411,6 @@ class HibernateConfigurationTest {
 
     @Test
     fun `three way join by composite primary between VaultStates, VaultLinearStates and DummyLinearStates`() {
-
         database.transaction {
             services.fillWithSomeTestLinearStates(8)
             services.fillWithSomeTestDeals(listOf("123", "456", "789"))
@@ -445,14 +444,18 @@ class HibernateConfigurationTest {
      */
     @Test
     fun `select fungible states by owner party`() {
-
-        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(CommonSchemaV1, CashSchemaV3)
-        val criteriaBuilder = sessionFactory.criteriaBuilder
-        val entityManager = sessionFactory.createEntityManager()
+        database.transaction {
+            // persist original cash states explicitly with V3 schema
+            cashStates.forEach {
+                val cashState = it.state.data
+                val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV3)
+            }
+        }
 
         // structure query
-        val criteriaQuery = criteriaBuilder.createQuery(CashSchemaV3.PersistentCashState::class.java)
-        criteriaQuery.from(CashSchemaV3.PersistentCashState::class.java)
+        val criteriaQuery = criteriaBuilder.createQuery(SampleCashSchemaV3.PersistentCashState::class.java)
+        criteriaQuery.from(SampleCashSchemaV3.PersistentCashState::class.java)
 
         // execute query
         val queryResults = entityManager.createQuery(criteriaQuery).resultList
@@ -466,14 +469,26 @@ class HibernateConfigurationTest {
      */
     @Test
     fun `query fungible states by owner party`() {
-
         database.transaction {
+            // persist original cash states explicitly with V3 schema
+            cashStates.forEach {
+                val cashState = it.state.data
+                val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV3)
+            }
+
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L), ownedBy = ALICE)
-            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L),
-                    issuedBy = BOB.ref(0), issuerKey = BOB_KEY, ownedBy = (BOB))
+            val cashStates = services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L),
+                                            issuedBy = BOB.ref(0), issuerKey = BOB_KEY, ownedBy = (BOB)).states
+            // persist additional cash states explicitly with V3 schema
+            cashStates.forEach {
+                val cashState = it.state.data
+                val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV3)
+            }
         }
 
-        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CommonSchemaV1, CashSchemaV3)
+        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CommonSchemaV1, SampleCashSchemaV3)
         val criteriaBuilder = sessionFactory.criteriaBuilder
         val entityManager = sessionFactory.createEntityManager()
 
@@ -485,9 +500,9 @@ class HibernateConfigurationTest {
         criteriaQuery.select(vaultStates)
 
         // search predicate
-        val cashStatesSchema = criteriaQuery.from(CashSchemaV3.PersistentCashState::class.java)
+        val cashStatesSchema = criteriaQuery.from(SampleCashSchemaV3.PersistentCashState::class.java)
 
-        val joinCashToParty = cashStatesSchema.join<CashSchemaV3.PersistentCashState,CommonSchemaV1.Party>("owner")
+        val joinCashToParty = cashStatesSchema.join<SampleCashSchemaV3.PersistentCashState,CommonSchemaV1.Party>("owner")
         val queryOwnerKey = BOB_PUBKEY.toBase58String()
         criteriaQuery.where(criteriaBuilder.equal(joinCashToParty.get<CommonSchemaV1.Party>("key"), queryOwnerKey))
 
@@ -510,14 +525,18 @@ class HibernateConfigurationTest {
      */
     @Test
     fun `select fungible states by participants`() {
-
-        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(CommonSchemaV1, CashSchemaV3)
-        val criteriaBuilder = sessionFactory.criteriaBuilder
-        val entityManager = sessionFactory.createEntityManager()
+        database.transaction {
+            // persist cash states explicitly with V2 schema
+            cashStates.forEach {
+                val cashState = it.state.data
+                val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV3)
+            }
+        }
 
         // structure query
-        val criteriaQuery = criteriaBuilder.createQuery(CashSchemaV3.PersistentCashState::class.java)
-        criteriaQuery.from(CashSchemaV3.PersistentCashState::class.java)
+        val criteriaQuery = criteriaBuilder.createQuery(SampleCashSchemaV3.PersistentCashState::class.java)
+        criteriaQuery.from(SampleCashSchemaV3.PersistentCashState::class.java)
 
         // execute query
         val queryResults = entityManager.createQuery(criteriaQuery).resultList
@@ -530,19 +549,33 @@ class HibernateConfigurationTest {
      */
     @Test
     fun `query fungible states by participants`() {
-
-        val cashStates =
-                database.transaction {
-                    services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L),
-                            issuedBy = BOB.ref(0), issuerKey = BOB_KEY, ownedBy = BOB)
-                    services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L),
-                            ownedBy = (ALICE))
+        val firstCashState =
+            database.transaction {
+                // persist original cash states explicitly with V3 schema
+                cashStates.forEach {
+                    val cashState = it.state.data
+                    val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                    hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV3)
                 }
-        val firstCashState = cashStates.states.first()
 
-        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, CommonSchemaV1, CashSchemaV3)
-        val criteriaBuilder = sessionFactory.criteriaBuilder
-        val entityManager = sessionFactory.createEntityManager()
+                val moreCash = services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L),
+                        issuedBy = BOB.ref(0), issuerKey = BOB_KEY, ownedBy = BOB).states
+                // persist additional cash states explicitly with V3 schema
+                moreCash.forEach {
+                    val cashState = it.state.data
+                    val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                    hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV3)
+                }
+
+                val cashStates = services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 2, 2, Random(0L), ownedBy = (ALICE)).states
+                // persist additional cash states explicitly with V3 schema
+                cashStates.forEach {
+                    val cashState = it.state.data
+                    val dummyFungibleState = DummyFungibleContract.State(cashState.amount, cashState.owner)
+                    hibernatePersister.persistStateWithSchema(dummyFungibleState, it.ref, SampleCashSchemaV3)
+                }
+                cashStates.first()
+            }
 
         // structure query
         val criteriaQuery = criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
@@ -552,9 +585,9 @@ class HibernateConfigurationTest {
         criteriaQuery.select(vaultStates)
 
         // search predicate
-        val cashStatesSchema = criteriaQuery.from(CashSchemaV3.PersistentCashState::class.java)
+        val cashStatesSchema = criteriaQuery.from(SampleCashSchemaV3.PersistentCashState::class.java)
 
-        val joinCashToParty = cashStatesSchema.join<CashSchemaV3.PersistentCashState, CommonSchemaV1.Party>("participants")
+        val joinCashToParty = cashStatesSchema.join<SampleCashSchemaV3.PersistentCashState, CommonSchemaV1.Party>("participants")
         val queryParticipantKeys = firstCashState.state.data.participants.map { it.owningKey.toBase58String() }
         criteriaQuery.where(criteriaBuilder.equal(joinCashToParty.get<CommonSchemaV1.Party>("key"), queryParticipantKeys))
 
@@ -563,7 +596,6 @@ class HibernateConfigurationTest {
 
         // execute query
         val queryResults = entityManager.createQuery(criteriaQuery).resultList
-        println("ALICE_PUB_KEY: ${ALICE_PUBKEY.toBase58String()}")
         queryResults.forEach {
             val contractState = it.contractState.deserialize<TransactionState<ContractState>>(storageKryo())
             val cashState = contractState.data as Cash.State

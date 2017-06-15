@@ -12,7 +12,7 @@ import javax.persistence.Table
  * Second version of a cash contract ORM schema that extends the common
  * [VaultFungibleState] abstract schema
  */
-object CashSchemaV2 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 2,
+object SampleCashSchemaV2 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 2,
                                    mappedTypes = listOf(PersistentCashState::class.java, CommonSchemaV1.Party::class.java)) {
     @Entity
     @Table(name = "cash_states_v2",

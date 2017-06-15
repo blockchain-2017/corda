@@ -18,8 +18,6 @@ import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.Emoji
 import net.corda.schemas.CashSchemaV1
-import net.corda.schemas.CashSchemaV2
-import net.corda.schemas.CashSchemaV3
 import org.bouncycastle.asn1.x500.X500Name
 import java.math.BigInteger
 import java.util.*
@@ -117,28 +115,14 @@ class Cash : OnLedgerAsset<Currency, Cash.Commands, Cash.State>() {
                         issuerParty = this.amount.token.issuer.party.owningKey.toBase58String(),
                         issuerRef = this.amount.token.issuer.reference.bytes
                 )
-                is CashSchemaV2 -> CashSchemaV2.PersistentCashState(
-                        _participants = this.participants.toSet(),
-                        _owner = this.owner,
-                        _quantity = this.amount.quantity,
-                        currency = this.amount.token.product.currencyCode,
-                        _issuerParty = this.amount.token.issuer.party,
-                        _issuerRef = this.amount.token.issuer.reference.bytes
-                )
-                is CashSchemaV3 -> CashSchemaV3.PersistentCashState(
-                        _participants = this.participants.toSet(),
-                        _owner = this.owner,
-                        _quantity = this.amount.quantity,
-                        _currency = this.amount.token.product.currencyCode,
-                        _issuerParty = this.amount.token.issuer.party,
-                        _issuerRef = this.amount.token.issuer.reference.bytes
-                )
+                /** Additional schema mappings would be added here (eg. CashSchemaV2, CashSchemaV3, ...) */
                 else -> throw IllegalArgumentException("Unrecognised schema $schema")
             }
         }
 
         /** Object Relational Mapping support. */
-        override fun supportedSchemas(): Iterable<MappedSchema> = listOf(CashSchemaV1, CashSchemaV2, CashSchemaV3)
+        override fun supportedSchemas(): Iterable<MappedSchema> = listOf(CashSchemaV1)
+        /** Additional used schemas would be added here (eg. CashSchemaV2, CashSchemaV3, ...) */
     }
     // DOCEND 1
 

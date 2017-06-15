@@ -1,17 +1,12 @@
-package net.corda.contracts.testing
+package net.corda.core.contracts
 
-import net.corda.core.contracts.*
 import net.corda.core.contracts.clauses.Clause
 import net.corda.core.contracts.clauses.FilterOn
 import net.corda.core.contracts.clauses.verifyClause
 import net.corda.core.crypto.SecureHash
 import net.corda.core.crypto.containsAny
-import net.corda.core.schemas.MappedSchema
-import net.corda.core.schemas.PersistentState
-import net.corda.core.schemas.QueryableState
-import net.corda.schemas.DummyLinearStateSchemaV1
 import net.corda.core.identity.AbstractParty
-import net.corda.schemas.DummyLinearStateSchemaV2
+import net.corda.core.schemas.*
 import java.security.PublicKey
 import java.time.Instant
 import java.time.LocalDateTime

@@ -12,8 +12,6 @@ import net.corda.node.services.api.SchemaService
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import net.corda.schemas.CashSchemaV1
-import net.corda.schemas.CashSchemaV2
-import net.corda.schemas.CashSchemaV3
 
 /**
  * Most basic implementation of [SchemaService].

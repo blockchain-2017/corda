@@ -21,9 +21,8 @@ import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.CashSchemaV1
 import net.corda.schemas.CashSchemaV1.PersistentCashState
-import net.corda.schemas.CashSchemaV3
 import net.corda.schemas.CommercialPaperSchemaV1
-import net.corda.schemas.CommercialPaperSchemaV2
+import net.corda.schemas.SampleCashSchemaV3
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
 import org.assertj.core.api.Assertions
@@ -703,7 +702,7 @@ abstract class VaultQueryTests {
             }
 
             assertThat(states).hasSize(20)
-            assertThat(metadata.first().contractStateClassName).isEqualTo("net.corda.contracts.testing.DummyLinearContract\$State")
+            assertThat(metadata.first().contractStateClassName).isEqualTo("net.corda.core.contracts.DummyLinearContract\$State")
             assertThat(metadata.first().status).isEqualTo(Vault.StateStatus.UNCONSUMED) // 0 = UNCONSUMED
             assertThat(metadata.last().contractStateClassName).isEqualTo("net.corda.contracts.asset.Cash\$State")
             assertThat(metadata.last().status).isEqualTo(Vault.StateStatus.CONSUMED)    // 1 = CONSUMED
@@ -1273,9 +1272,9 @@ abstract class VaultQueryTests {
                     }.toSignedTransaction()
             services.recordTransactions(commercialPaper2)
 
-            val ccyIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
-            val maturityIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
-            val faceValueIndex = LogicalExpression(CommercialPaperSchemaV2.PersistentCommercialPaperState::quantity, Operator.GREATER_THAN_OR_EQUAL, 10000L)
+            val ccyIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
+            val maturityIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
+            val faceValueIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
 
             val criteria1 = QueryCriteria.VaultCustomQueryCriteria(ccyIndex)
             val criteria2 = QueryCriteria.VaultCustomQueryCriteria(maturityIndex)
@@ -1297,7 +1296,7 @@ abstract class VaultQueryTests {
             services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
 
             // CashSchemaV3 NOT registered with NodeSchemaService
-            val logicalExpression = LogicalExpression(CashSchemaV3.PersistentCashState::currency, Operator.EQUAL, GBP.currencyCode)
+            val logicalExpression = LogicalExpression(SampleCashSchemaV3.PersistentCashState::currency, Operator.EQUAL, GBP.currencyCode)
             val criteria = VaultCustomQueryCriteria(logicalExpression)
 
             assertThatThrownBy {

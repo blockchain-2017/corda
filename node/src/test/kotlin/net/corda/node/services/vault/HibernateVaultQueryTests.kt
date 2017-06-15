@@ -11,7 +11,6 @@ import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.transaction
 import net.corda.schemas.CommercialPaperSchemaV1
-import net.corda.schemas.CommercialPaperSchemaV2
 import net.corda.testing.MEGA_CORP_KEY
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
@@ -27,7 +26,7 @@ class HibernateVaultQueryTests : VaultQueryTests() {
         dataSource = dataSourceAndDatabase.first
         database = dataSourceAndDatabase.second
         database.transaction {
-            val customSchemas = setOf(CommercialPaperSchemaV1, CommercialPaperSchemaV2)
+            val customSchemas = setOf(CommercialPaperSchemaV1)
             val hibernateConfig = HibernateConfiguration(NodeSchemaService(customSchemas))
             services = object : MockServices(MEGA_CORP_KEY) {
                 override val vaultService: VaultService = makeVaultService(dataSourceProps, hibernateConfig)

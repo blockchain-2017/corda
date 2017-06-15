@@ -1,19 +1,16 @@
 package net.corda.schemas
 
-import net.corda.core.crypto.toBase58String
 import net.corda.core.identity.AbstractParty
-import net.corda.core.identity.Party
 import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
-import java.util.*
 import javax.persistence.*
 
 /**
  * First version of a cash contract ORM schema that maps all fields of the [Cash] contract state as it stood
  * at the time of writing.
  */
-object CashSchemaV3 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 3,
+object SampleCashSchemaV3 : MappedSchema(schemaFamily = CashSchema.javaClass, version = 3,
                                    mappedTypes = listOf(PersistentCashState::class.java, CommonSchemaV1.Party::class.java)) {
     @Entity
     @Table(name = "cash_states_v3")

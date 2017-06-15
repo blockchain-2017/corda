@@ -40,7 +40,7 @@ class HibernateObserver(vaultUpdates: Observable<Vault.Update>, val config: Hibe
         }
     }
 
-    private fun persistStateWithSchema(state: QueryableState, stateRef: StateRef, schema: MappedSchema) {
+    fun persistStateWithSchema(state: QueryableState, stateRef: StateRef, schema: MappedSchema) {
         val sessionFactory = config.sessionFactoryForSchema(schema)
         val session = sessionFactory.withOptions().
                 connection(TransactionManager.current().connection).

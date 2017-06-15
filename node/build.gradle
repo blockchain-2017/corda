@@ -140,6 +140,9 @@ dependencies {
     testCompile project(':test-utils')
     testCompile project(':client:jfx')
 
+    // sample test schemas
+    testCompile project(path: ':finance', configuration: 'testArtifacts')
+
     // For H2 database support in persistence
     compile "com.h2database:h2:$h2_version"
 
