@@ -29,9 +29,10 @@ import kotlin.collections.ArrayList
  * @param certPaths initial set of certificate paths for the service, typically only used for unit tests.
  */
 @ThreadSafe
-class InMemoryIdentityService(identities: Iterable<PartyAndCertificate>,
+class InMemoryIdentityService(identities: Iterable<PartyAndCertificate> = emptySet(),
                               certPaths: Map<AnonymousParty, CertPath> = emptyMap(),
-                              val trustRoot: X509Certificate?) : SingletonSerializeAsToken(), IdentityService {
+                              override val trustRoot: X509Certificate?,
+                              vararg caCertificates: X509Certificate) : SingletonSerializeAsToken(), IdentityService {
     constructor(identities: Iterable<PartyAndCertificate> = emptySet(),
                 certPaths: Map<AnonymousParty, CertPath> = emptyMap(),
                 trustRoot: X509CertificateHolder?) : this(identities, certPaths, trustRoot?.cert)
@@ -39,6 +40,10 @@ class InMemoryIdentityService(identities: Iterable<PartyAndCertificate>,
         private val log = loggerFor<InMemoryIdentityService>()
     }
 
+    /**
+     * Certificate store for certificate authority and intermediary certificates.
+     */
+    override val trustRootHolder = trustRoot?.let { X509CertificateHolder(it.encoded) }
     private val trustAnchor: TrustAnchor? = trustRoot?.let { cert -> TrustAnchor(cert, null) }
     private val keyToParties = ConcurrentHashMap<PublicKey, PartyAndCertificate>()
     private val principalToParties = ConcurrentHashMap<X500Name, PartyAndCertificate>()
@@ -140,7 +145,7 @@ class InMemoryIdentityService(identities: Iterable<PartyAndCertificate>,
         val validator = CertPathValidator.getInstance("PKIX")
         validatorParameters.isRevocationEnabled = false
         val result = validator.validate(path, validatorParameters) as PKIXCertPathValidatorResult
-        require(result.trustAnchor == null || result.trustAnchor == trustAnchor)
+        require(result.trustAnchor == trustAnchor)
         require(result.publicKey == party.owningKey) { "Certificate path validation must end at owning key ${party.owningKey.toStringShort()}, found ${result.publicKey.toStringShort()}" }
         return result
     }
