@@ -4,6 +4,7 @@ import net.corda.core.contracts.ContractState
 import net.corda.core.node.services.*
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.node.services.vault.Sort
+import net.corda.core.schemas.DummyLinearStateSchemaV1
 import net.corda.core.transactions.SignedTransaction
 import net.corda.node.services.database.HibernateConfiguration
 import net.corda.node.services.schema.NodeSchemaService
@@ -26,7 +27,7 @@ class HibernateVaultQueryTests : VaultQueryTests() {
         dataSource = dataSourceAndDatabase.first
         database = dataSourceAndDatabase.second
         database.transaction {
-            val customSchemas = setOf(CommercialPaperSchemaV1)
+            val customSchemas = setOf(CommercialPaperSchemaV1, DummyLinearStateSchemaV1)
             val hibernateConfig = HibernateConfiguration(NodeSchemaService(customSchemas))
             services = object : MockServices(MEGA_CORP_KEY) {
                 override val vaultService: VaultService = makeVaultService(dataSourceProps, hibernateConfig)

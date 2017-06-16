@@ -21,6 +21,7 @@ import java.lang.reflect.Field
 import java.security.PublicKey
 import java.time.Instant
 import java.util.*
+import javax.persistence.Tuple
 import javax.persistence.criteria.*
 import kotlin.jvm.internal.MutablePropertyReference1
 import kotlin.reflect.KClass
@@ -30,7 +31,7 @@ import kotlin.reflect.KMutableProperty1
 class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                                    val contractTypeMappings: Map<String, List<String>>,
                                    val criteriaBuilder: CriteriaBuilder,
-                                   val criteriaQuery: CriteriaQuery<VaultSchemaV1.VaultStates>,
+                                   val criteriaQuery: CriteriaQuery<Tuple>,
                                    val vaultStates: Root<VaultSchemaV1.VaultStates>) : IQueryCriteriaParser {
     private companion object {
         val log = loggerFor<HibernateQueryCriteriaParser>()
@@ -46,7 +47,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         var predicateSet = mutableSetOf<Predicate>()
 
         rootEntities.putIfAbsent(VaultSchemaV1.VaultStates::class.java, vaultStates)
-        criteriaQuery.select(vaultStates)
+        criteriaQuery.multiselect(vaultStates)
 
         // state status
         if (criteria.status == Vault.StateStatus.ALL)
@@ -120,7 +121,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         val vaultFungibleStates = criteriaQuery.from(VaultSchemaV1.VaultFungibleStates::class.java)
         rootEntities.putIfAbsent(VaultSchemaV1.VaultFungibleStates::class.java, vaultFungibleStates)
-        criteriaQuery.select(vaultStates)
+        criteriaQuery.multiselect(vaultStates)
 
         val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultFungibleStates.get<PersistentStateRef>("stateRef")))
         predicateSet.add(joinPredicate)
@@ -172,7 +173,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         val vaultLinearStates = criteriaQuery.from(VaultSchemaV1.VaultLinearStates::class.java)
         rootEntities.putIfAbsent(VaultSchemaV1.VaultLinearStates::class.java, vaultLinearStates)
-        criteriaQuery.select(vaultStates)
+        criteriaQuery.multiselect(vaultStates)
         val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultLinearStates.get<PersistentStateRef>("stateRef")))
         joinPredicates.add(joinPredicate)
 
@@ -211,7 +212,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         try {
             val entityRoot = criteriaQuery.from(entityClass)
             rootEntities.putIfAbsent(entityClass, entityRoot)
-            criteriaQuery.select(vaultStates)
+            criteriaQuery.multiselect(vaultStates)
             val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
             joinPredicates.add(joinPredicate)
 
@@ -254,7 +255,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         try {
             val entityRoot = criteriaQuery.from(entityClass)
             rootEntities.putIfAbsent(entityClass, entityRoot)
-            criteriaQuery.select(vaultStates)
+            criteriaQuery.multiselect(vaultStates)
             val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
             joinPredicates.add(joinPredicate)
 
@@ -391,23 +392,37 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         return predicate
     }
 
-    override fun parse(criteria: QueryCriteria) : Collection<Predicate> {
+    override fun parse(criteria: QueryCriteria, sorting: Sort?) : Collection<Predicate> {
         val predicateSet = criteria.visit(this)
 
-        val combinedPredicates = joinPredicates.plus(predicateSet)
+        sorting?.let {
+            if (sorting.columns.isNotEmpty())
+                parse(sorting)
+        }
+
+        var combinedPredicates = joinPredicates.plus(predicateSet)
         criteriaQuery.where(*combinedPredicates.toTypedArray())
 
         return predicateSet
     }
 
-    override fun parse(sorting: Sort) {
+    private fun parse(sorting: Sort) {
         log.trace { "Parsing sorting specification: $sorting" }
 
         var orderCriteria = mutableListOf<Order>()
 
         sorting.columns.map { (entityStateClass, entityStateColumnName, direction, nullHandling) ->
+
             val sortEntityRoot =
-                    rootEntities.getOrElse(entityStateClass) { throw VaultQueryException("Missing root entity: $entityStateClass") }
+                    rootEntities.getOrElse(entityStateClass) {
+                        // scenario where sorting on attributes not parsed as criteria
+                        val entityRoot = criteriaQuery.from(entityStateClass)
+                        criteriaQuery.multiselect(vaultStates, entityRoot)
+                        val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<PersistentStateRef>("stateRef")))
+                        joinPredicates.add(joinPredicate)
+                        rootEntities.put(entityStateClass, entityRoot)
+                        entityRoot
+                    }
             if (nullHandling != Sort.NullHandling.NULLS_NONE)
             // JPA Criteria does not support NULL ordering
                 throw VaultQueryException("""Unsupported NULL ordering mode: $nullHandling.
@@ -424,6 +439,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         if (orderCriteria.isNotEmpty()) {
             criteriaQuery.orderBy(orderCriteria)
+            criteriaQuery.where(*joinPredicates.toTypedArray())
         }
     }
 }

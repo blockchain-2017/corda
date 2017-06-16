@@ -25,6 +25,7 @@ import org.jetbrains.exposed.sql.transactions.TransactionManager
 import rx.subjects.PublishSubject
 import java.lang.Exception
 import javax.persistence.EntityManager
+import javax.persistence.Tuple
 
 
 class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration,
@@ -46,7 +47,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration,
                 openSession()
 
         session.use {
-            val criteriaQuery = criteriaBuilder.createQuery(VaultSchemaV1.VaultStates::class.java)
+            val criteriaQuery = criteriaBuilder.createQuery(Tuple::class.java)
             val queryRootVaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
 
             val contractTypeMappings = resolveUniqueContractStateTypes(session)
@@ -55,11 +56,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration,
 
             try {
                 // parse criteria and build where predicates
-                criteriaParser.parse(criteria)
-
-                // sorting
-                if (sorting.columns.isNotEmpty())
-                    criteriaParser.parse(sorting)
+                criteriaParser.parse(criteria, sorting)
 
                 // prepare query for execution
                 val query = session.createQuery(criteriaQuery)
@@ -86,6 +83,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration,
 
                 results.asSequence()
                         .forEach { it ->
+                            val it = it[0] as VaultSchemaV1.VaultStates
                             val stateRef = StateRef(SecureHash.parse(it.stateRef!!.txId!!), it.stateRef!!.index!!)
                             val state = it.contractState.deserialize<TransactionState<T>>(storageKryo())
                             statesMeta.add(Vault.StateMetadata(stateRef, it.contractStateClassName, it.recordedTime, it.consumedTime, it.stateStatus, it.notaryName, it.notaryKey, it.lockId, it.lockUpdateTime))

@@ -11,6 +11,7 @@ import net.corda.core.identity.Party
 import net.corda.core.node.services.*
 import net.corda.core.node.services.vault.*
 import net.corda.core.node.services.vault.QueryCriteria.*
+import net.corda.core.schemas.DummyLinearStateSchemaV1
 import net.corda.core.seconds
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.utilities.DUMMY_NOTARY
@@ -23,6 +24,7 @@ import net.corda.schemas.CashSchemaV1
 import net.corda.schemas.CashSchemaV1.PersistentCashState
 import net.corda.schemas.CommercialPaperSchemaV1
 import net.corda.schemas.SampleCashSchemaV3
+import net.corda.schemas.SampleCommercialPaperSchemaV2
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
 import org.assertj.core.api.Assertions
@@ -888,6 +890,63 @@ abstract class VaultQueryTests {
     }
 
     @Test
+    fun `unconsumed linear states sorted by linear state attribute`() {
+        database.transaction {
+
+            services.fillWithSomeTestLinearStates(1, externalId = "111")
+            services.fillWithSomeTestLinearStates(2, externalId = "222")
+            services.fillWithSomeTestLinearStates(3, externalId = "333")
+
+            val vaultCriteria = VaultQueryCriteria()
+            val sorting = Sort(setOf(Sort.SortColumn(VaultSchemaV1.VaultLinearStates::class.java, "externalId", Sort.Direction.DESC)))
+
+            val results = vaultQuerySvc.queryBy<DummyLinearContract.State>((vaultCriteria), sorting = sorting)
+            results.states.forEach { println("${it.state.data.linearString}") }
+            assertThat(results.states).hasSize(6)
+        }
+    }
+
+    @Test
+    fun `unconsumed deal states paged and sorted`() {
+        database.transaction {
+
+            val linearStates = services.fillWithSomeTestLinearStates(10)
+            val uid = linearStates.states.first().state.data.linearId
+            services.fillWithSomeTestDeals(listOf("123", "456", "789"))
+
+            val vaultCriteria = VaultQueryCriteria(status = Vault.StateStatus.UNCONSUMED)
+            val linearStateCriteria = LinearStateQueryCriteria(linearId = listOf(uid))
+            val dealStateCriteria = LinearStateQueryCriteria(dealRef = listOf("123", "456", "789"))
+            val compositeCriteria = vaultCriteria.and(linearStateCriteria).or(dealStateCriteria)
+
+            val sorting = Sort(setOf(Sort.SortColumn(VaultSchemaV1.VaultLinearStates::class.java, "dealReference", Sort.Direction.DESC)))
+
+            val results = vaultQuerySvc.queryBy<LinearState>(compositeCriteria, sorting = sorting)
+            results.states.forEach {
+                if (it.state.data is DummyDealContract.State)
+                    println("${(it.state.data as DealState)?.ref}, ${it.state.data.linearId}") }
+            assertThat(results.states).hasSize(4)
+        }
+    }
+
+    @Test
+    fun `unconsumed linear states sorted by custom attribute`() {
+        database.transaction {
+
+            services.fillWithSomeTestLinearStates(1, linearString = "111")
+            services.fillWithSomeTestLinearStates(2, linearString = "222")
+            services.fillWithSomeTestLinearStates(3, linearString = "333")
+
+            val vaultCriteria = VaultQueryCriteria()
+            val sorting = Sort(setOf(Sort.SortColumn(DummyLinearStateSchemaV1.PersistentDummyLinearState::class.java, "linearString", Sort.Direction.DESC)))
+
+            val results = vaultQuerySvc.queryBy<DummyLinearContract.State>((vaultCriteria), sorting = sorting)
+            results.states.forEach { println("${it.state.data.linearString}") }
+            assertThat(results.states).hasSize(6)
+        }
+    }
+
+    @Test
     fun `return consumed linear states for a given id`() {
         database.transaction {
 
@@ -901,7 +960,7 @@ abstract class VaultQueryTests {
             // DOCSTART VaultQueryExample9
             val linearStateCriteria = LinearStateQueryCriteria(linearId = txns.states.map { it.state.data.linearId })
             val vaultCriteria = VaultQueryCriteria(status = Vault.StateStatus.CONSUMED)
-            val sorting = Sort(setOf(Sort.SortColumn(VaultSchemaV1.VaultLinearStates::class.java, "uuid", Sort.Direction.DESC)))     // Note: column name (not attribute name)
+            val sorting = Sort(setOf(Sort.SortColumn(VaultSchemaV1.VaultLinearStates::class.java, "uuid", Sort.Direction.DESC)))
             val results = vaultQuerySvc.queryBy<LinearState>(linearStateCriteria.and(vaultCriteria), sorting = sorting)
             // DOCEND VaultQueryExample9
             assertThat(results.states).hasSize(3)
@@ -1222,48 +1281,6 @@ abstract class VaultQueryTests {
 
             // MegaCorp™ now issues £5,000 of commercial paper, to mature in 30 days, owned by itself.
             val faceValue2 = 5000.POUNDS `issued by` DUMMY_CASH_ISSUER
-            val commercialPaper2 =
-                    CommercialPaper().generateIssue(issuance, faceValue2, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
-                        addTimeWindow(TEST_TX_TIME, 30.seconds)
-                        signWith(MEGA_CORP_KEY)
-                        signWith(DUMMY_NOTARY_KEY)
-                    }.toSignedTransaction()
-            services.recordTransactions(commercialPaper2)
-
-            val ccyIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::currency, Operator.EQUAL, USD.currencyCode)
-            val maturityIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::maturity, Operator.GREATER_THAN_OR_EQUAL, TEST_TX_TIME + 30.days)
-            val faceValueIndex = LogicalExpression(CommercialPaperSchemaV1.PersistentCommercialPaperState::faceValue, Operator.GREATER_THAN_OR_EQUAL, 10000L)
-
-            val criteria1 = QueryCriteria.VaultCustomQueryCriteria(ccyIndex)
-            val criteria2 = QueryCriteria.VaultCustomQueryCriteria(maturityIndex)
-            val criteria3 = QueryCriteria.VaultCustomQueryCriteria(faceValueIndex)
-
-            val result = vaultQuerySvc.queryBy<CommercialPaper.State>(criteria1.and(criteria3).and(criteria2))
-
-            Assertions.assertThat(result.states).hasSize(1)
-            Assertions.assertThat(result.statesMetadata).hasSize(1)
-        }
-    }
-
-    // specifying Query on Commercial Paper contract state attributes
-    @Test
-    fun `custom query using JPA - commercial paper schema V2`() {
-        database.transaction {
-
-            val issuance = MEGA_CORP.ref(1)
-
-            // MegaCorp™ issues $10,000 of commercial paper, to mature in 30 days, owned by itself.
-            val faceValue = 10000.DOLLARS `issued by` DUMMY_CASH_ISSUER
-            val commercialPaper =
-                    CommercialPaper().generateIssue(issuance, faceValue, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
-                        addTimeWindow(TEST_TX_TIME, 30.seconds)
-                        signWith(MEGA_CORP_KEY)
-                        signWith(DUMMY_NOTARY_KEY)
-                    }.toSignedTransaction()
-            services.recordTransactions(commercialPaper)
-
-            // MegaCorp™ now issues £10,000 of commercial paper, to mature in 30 days, owned by itself.
-            val faceValue2 = 10000.POUNDS `issued by` DUMMY_CASH_ISSUER
             val commercialPaper2 =
                     CommercialPaper().generateIssue(issuance, faceValue2, TEST_TX_TIME + 30.days, DUMMY_NOTARY).apply {
                         addTimeWindow(TEST_TX_TIME, 30.seconds)

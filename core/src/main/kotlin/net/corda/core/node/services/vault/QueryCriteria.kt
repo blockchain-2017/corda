@@ -125,8 +125,7 @@ interface IQueryCriteriaParser {
     fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): Collection<Predicate>
     fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
     fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
-    fun parse(criteria: QueryCriteria) : Collection<Predicate>
-    fun parse(sorting: Sort)
+    fun parse(criteria: QueryCriteria, sorting: Sort? = null) : Collection<Predicate>
 }
 
 infix fun QueryCriteria.and(criteria: QueryCriteria): QueryCriteria = AndComposition(this, criteria)

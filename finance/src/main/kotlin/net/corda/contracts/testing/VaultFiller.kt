@@ -17,6 +17,9 @@ import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import java.security.KeyPair
 import java.security.PublicKey
+import java.security.Timestamp
+import java.time.Instant
+import java.time.Instant.now
 import java.util.*
 
 @JvmOverloads
@@ -47,14 +50,23 @@ fun ServiceHub.fillWithSomeTestDeals(dealIds: List<String>,
 @JvmOverloads
 fun ServiceHub.fillWithSomeTestLinearStates(numberToCreate: Int,
                                             externalId: String? = null,
-                                            participants: List<AbstractParty> = emptyList()) : Vault<LinearState> {
+                                            participants: List<AbstractParty> = emptyList(),
+                                            linearString: String = "",
+                                            linearNumber: Long = 0L,
+                                            linearBoolean: Boolean = false,
+                                            linearTimestamp: Instant = now()) : Vault<LinearState> {
     val myKey: PublicKey = myInfo.legalIdentity.owningKey
     val me = AnonymousParty(myKey)
 
     val transactions: List<SignedTransaction> = (1..numberToCreate).map {
         // Issue a Linear state
         val dummyIssue = TransactionType.General.Builder(notary = DUMMY_NOTARY).apply {
-            addOutputState(DummyLinearContract.State(linearId = UniqueIdentifier(externalId), participants = participants.plus(me)))
+            addOutputState(DummyLinearContract.State(linearId = UniqueIdentifier(externalId),
+                                                     participants = participants.plus(me),
+                                                     linearString = linearString,
+                                                     linearNumber = linearNumber,
+                                                     linearBoolean = linearBoolean,
+                                                     linearTimestamp = linearTimestamp))
             signWith(DUMMY_NOTARY_KEY)
         }
 

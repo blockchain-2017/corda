@@ -140,22 +140,23 @@ public class VaultQueryJavaTests {
             fillWithSomeTestDeals(services, dealIds);
 
             // DOCSTART VaultJavaQueryExample2
-            Vault.StateStatus status = Vault.StateStatus.CONSUMED;
+            Vault.StateStatus status = Vault.StateStatus.UNCONSUMED;
             @SuppressWarnings("unchecked")
-            Set<Class<ContractState>> contractStateTypes = new HashSet(Collections.singletonList(Cash.State.class));
+            Set<Class<LinearState>> contractStateTypes = new HashSet(Collections.singletonList(LinearState.class));
 
             QueryCriteria vaultCriteria = new VaultQueryCriteria(status, contractStateTypes);
 
             List<UniqueIdentifier> linearIds = Arrays.asList(uid);
-            List<AbstractParty> dealParties = Arrays.asList(getMEGA_CORP());
-            QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(dealParties, linearIds, dealIds);
+            QueryCriteria linearCriteriaAll = new LinearStateQueryCriteria(null, linearIds);
+            QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(null, null, dealIds);
 
-            QueryCriteria compositeCriteria = and(dealCriteriaAll, vaultCriteria);
+            QueryCriteria compositeCriteria1 = or(dealCriteriaAll, linearCriteriaAll);
+            QueryCriteria compositeCriteria2 = and(vaultCriteria, compositeCriteria1);
 
             PageSpecification pageSpec  = new PageSpecification(0, getMAX_PAGE_SIZE());
             Sort.SortColumn sortByUid = new Sort.SortColumn(VaultSchemaV1.VaultLinearStates.class, "uuid", Sort.Direction.DESC, Sort.NullHandling.NULLS_NONE);
             Sort sorting = new Sort(ImmutableSet.of(sortByUid));
-            Vault.Page<ContractState> results = vaultQuerySvc.queryBy(Cash.State.class, compositeCriteria, pageSpec, sorting);
+            Vault.Page<LinearState> results = vaultQuerySvc.queryBy(LinearState.class, compositeCriteria2, pageSpec, sorting);
             // DOCEND VaultJavaQueryExample2
 
             assertThat(results.getStates()).hasSize(4);

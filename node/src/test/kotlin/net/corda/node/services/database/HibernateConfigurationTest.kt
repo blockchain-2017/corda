@@ -44,6 +44,7 @@ import java.io.Closeable
 import java.time.Instant
 import java.util.*
 import javax.persistence.EntityManager
+import javax.persistence.Tuple
 import javax.persistence.criteria.CriteriaBuilder
 
 class HibernateConfigurationTest {
@@ -604,4 +605,115 @@ class HibernateConfigurationTest {
 
         assertThat(queryResults).hasSize(12)
     }
+
+    /**
+     * Query with sorting on Common table attribute
+     */
+    @Test
+    fun `with sorting on attribute from common table`() {
+
+        database.transaction {
+            services.fillWithSomeTestLinearStates(1, externalId = "111")
+            services.fillWithSomeTestLinearStates(2, externalId = "222")
+            services.fillWithSomeTestLinearStates(3, externalId = "333")
+        }
+
+        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, DummyLinearStateSchemaV2)
+        val criteriaBuilder = sessionFactory.criteriaBuilder
+        val entityManager = sessionFactory.createEntityManager()
+
+        // structure query
+        val criteriaQuery = criteriaBuilder.createQuery(Tuple::class.java)
+        val vaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
+        val vaultLinearStates = criteriaQuery.from(VaultSchemaV1.VaultLinearStates::class.java)
+
+        // join
+        criteriaQuery.multiselect(vaultStates, vaultLinearStates)
+        val joinPredicate = criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultLinearStates.get<PersistentStateRef>("stateRef"))
+        criteriaQuery.where(joinPredicate)
+
+        // order by DESC
+        criteriaQuery.orderBy(criteriaBuilder.desc(vaultLinearStates.get<String>("externalId")))
+        criteriaQuery.orderBy(criteriaBuilder.desc(vaultLinearStates.get<UUID>("uuid")))
+
+        // execute query
+        val queryResults = entityManager.createQuery(criteriaQuery).resultList
+        queryResults.map {
+            val vaultState = it[0] as VaultSchemaV1.VaultStates
+            val vaultLinearState = it[1] as VaultSchemaV1.VaultLinearStates
+            println("${vaultState.stateRef} : ${vaultLinearState.externalId} ${vaultLinearState.uuid}")
+        }
+
+        // order by ASC
+        criteriaQuery.orderBy(criteriaBuilder.asc(vaultLinearStates.get<String>("externalId")))
+        criteriaQuery.orderBy(criteriaBuilder.asc(vaultLinearStates.get<UUID>("uuid")))
+
+        // execute query
+        val queryResultsAsc = entityManager.createQuery(criteriaQuery).resultList
+        queryResultsAsc.map {
+            val vaultState = it[0] as VaultSchemaV1.VaultStates
+            val vaultLinearState = it[1] as VaultSchemaV1.VaultLinearStates
+            println("${vaultState.stateRef} : ${vaultLinearState.externalId} ${vaultLinearState.uuid}")
+        }
+
+        assertThat(queryResults).hasSize(6)
+    }
+
+    /**
+     * Query with sorting on Custom table attribute
+     */
+    @Test
+    fun `with sorting on attribute from custom table`() {
+
+        database.transaction {
+            services.fillWithSomeTestLinearStates(1, externalId = "111")
+            services.fillWithSomeTestLinearStates(2, externalId = "222")
+            services.fillWithSomeTestLinearStates(3, externalId = "333")
+        }
+
+        val sessionFactory = hibernateConfig.sessionFactoryForSchemas(VaultSchemaV1, DummyLinearStateSchemaV1)
+        val criteriaBuilder = sessionFactory.criteriaBuilder
+        val entityManager = sessionFactory.createEntityManager()
+
+        // structure query
+        val criteriaQuery = criteriaBuilder.createQuery(Tuple::class.java)
+        val vaultStates = criteriaQuery.from(VaultSchemaV1.VaultStates::class.java)
+        val vaultLinearStates = criteriaQuery.from(VaultSchemaV1.VaultLinearStates::class.java)
+        val dummyLinearStates = criteriaQuery.from(DummyLinearStateSchemaV1.PersistentDummyLinearState::class.java)
+
+        // join
+        criteriaQuery.multiselect(vaultStates, vaultLinearStates, dummyLinearStates)
+        val joinPredicate1 = criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultLinearStates.get<PersistentStateRef>("stateRef"))
+        val joinPredicate2 = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), dummyLinearStates.get<PersistentStateRef>("stateRef")))
+        criteriaQuery.where(joinPredicate1, joinPredicate2)
+
+        // order by DESC
+        criteriaQuery.orderBy(criteriaBuilder.desc(dummyLinearStates.get<String>("externalId")))
+        criteriaQuery.orderBy(criteriaBuilder.desc(dummyLinearStates.get<UUID>("uuid")))
+
+        // execute query
+        val queryResults = entityManager.createQuery(criteriaQuery).resultList
+        queryResults.map {
+            val vaultState = it[0] as VaultSchemaV1.VaultStates
+            val vaultLinearStates = it[1] as VaultSchemaV1.VaultLinearStates
+            val dummyLinearStates = it[2] as DummyLinearStateSchemaV1.PersistentDummyLinearState
+            println("${vaultState.stateRef} : [${dummyLinearStates.externalId} ${dummyLinearStates.uuid}] : [${vaultLinearStates.externalId} ${vaultLinearStates.uuid}]")
+        }
+
+        // order by ASC
+        criteriaQuery.orderBy(criteriaBuilder.asc(dummyLinearStates.get<String>("externalId")))
+        criteriaQuery.orderBy(criteriaBuilder.asc(dummyLinearStates.get<UUID>("uuid")))
+
+        // execute query
+        val queryResultsAsc = entityManager.createQuery(criteriaQuery).resultList
+        queryResultsAsc.map {
+            val vaultState = it[0] as VaultSchemaV1.VaultStates
+            val vaultLinearStates = it[1] as VaultSchemaV1.VaultLinearStates
+            val dummyLinearStates = it[2] as DummyLinearStateSchemaV1.PersistentDummyLinearState
+            println("${vaultState.stateRef} : [${dummyLinearStates.externalId} ${dummyLinearStates.uuid}] : [${vaultLinearStates.externalId} ${vaultLinearStates.uuid}]")
+        }
+
+        assertThat(queryResults).hasSize(6)
+    }
+
 }
