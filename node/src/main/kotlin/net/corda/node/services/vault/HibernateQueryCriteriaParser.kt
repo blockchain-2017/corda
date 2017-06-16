@@ -3,7 +3,6 @@ package net.corda.node.services.vault
 import net.corda.core.contracts.ContractState
 import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.UniqueIdentifier
-import net.corda.core.crypto.toBase58String
 import net.corda.core.identity.AbstractParty
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultQueryException
@@ -17,15 +16,9 @@ import net.corda.core.utilities.trace
 import net.corda.node.services.vault.schemas.jpa.CommonSchemaV1
 import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1
 import org.bouncycastle.asn1.x500.X500Name
-import java.lang.reflect.Field
-import java.security.PublicKey
-import java.time.Instant
 import java.util.*
 import javax.persistence.Tuple
 import javax.persistence.criteria.*
-import kotlin.jvm.internal.MutablePropertyReference1
-import kotlin.reflect.KClass
-import kotlin.reflect.KMutableProperty1
 
 
 class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
@@ -44,7 +37,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
     override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) : Collection<Predicate> {
         log.trace { "Parsing VaultQueryCriteria: $criteria" }
-        var predicateSet = mutableSetOf<Predicate>()
+        val predicateSet = mutableSetOf<Predicate>()
 
         rootEntities.putIfAbsent(VaultSchemaV1.VaultStates::class.java, vaultStates)
         criteriaQuery.multiselect(vaultStates)
@@ -85,33 +78,87 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         // time constraints (recorded, consumed)
         criteria.timeCondition?.let {
             val timeCondition = criteria.timeCondition
-            val timeInstantType = timeCondition!!.leftOperand
-            val timeOperator = timeCondition.operator
-            val timeValue = timeCondition.rightOperand
-            predicateSet.add(
-                when (timeInstantType) {
-                    QueryCriteria.TimeInstantType.CONSUMED ->
-                        criteriaBuilder.and(parseOperator(timeOperator, vaultStates.get<Instant>("consumedTime"), timeValue))
-                    QueryCriteria.TimeInstantType.RECORDED ->
-                        criteriaBuilder.and(parseOperator(timeOperator, vaultStates.get<Instant>("recordedTime"), timeValue))
-                })
+            val timeInstantType = timeCondition!!.type
+            val timeColumn = when (timeInstantType) {
+                QueryCriteria.TimeInstantType.RECORDED -> Column.Kotlin(VaultSchemaV1.VaultStates::recordedTime)
+                QueryCriteria.TimeInstantType.CONSUMED -> Column.Kotlin(VaultSchemaV1.VaultStates::consumedTime)
+            }
+            val expression = CriteriaExpression.ColumnPredicateExpression(timeColumn, timeCondition.predicate)
+            predicateSet.add(expressionToPredicate(vaultStates, expression))
         }
         return predicateSet
     }
 
-    private fun parseOperator(operator: Operator, attribute: Path<Instant>?, value: Array<Instant>): Predicate? {
-        val predicate =
-                when (operator) {
-                    Operator.EQUAL -> criteriaBuilder.equal(attribute, value[0])
-                    Operator.NOT_EQUAL -> criteriaBuilder.notEqual(attribute, value[0])
-                    Operator.GREATER_THAN -> criteriaBuilder.greaterThan(attribute, value[0])
-                    Operator.GREATER_THAN_OR_EQUAL -> criteriaBuilder.greaterThanOrEqualTo(attribute, value[0])
-                    Operator.LESS_THAN -> criteriaBuilder.lessThan(attribute, value[0])
-                    Operator.LESS_THAN_OR_EQUAL -> criteriaBuilder.lessThanOrEqualTo(attribute, value[0])
-                    Operator.BETWEEN -> criteriaBuilder.between(attribute, value[0],value[1])
-                    else -> throw VaultQueryException("Invalid query operator: $operator.")
+    private fun columnPredicateToPredicate(column: Path<out Any?>, columnPredicate: ColumnPredicate<*>): Predicate {
+        return when (columnPredicate) {
+            is ColumnPredicate.EqualityComparison -> {
+                val literal = columnPredicate.rightLiteral
+                when (columnPredicate.operator) {
+                    EqualityComparisonOperator.EQUAL -> criteriaBuilder.equal(column, literal)
+                    EqualityComparisonOperator.NOT_EQUAL -> criteriaBuilder.notEqual(column, literal)
                 }
-        return predicate
+            }
+            is ColumnPredicate.BinaryComparison -> {
+                column as Path<Comparable<Any?>?>
+                val literal = columnPredicate.rightLiteral as Comparable<Any?>?
+                when (columnPredicate.operator) {
+                    BinaryComparisonOperator.GREATER_THAN -> criteriaBuilder.greaterThan(column, literal)
+                    BinaryComparisonOperator.GREATER_THAN_OR_EQUAL -> criteriaBuilder.greaterThanOrEqualTo(column, literal)
+                    BinaryComparisonOperator.LESS_THAN -> criteriaBuilder.lessThan(column, literal)
+                    BinaryComparisonOperator.LESS_THAN_OR_EQUAL -> criteriaBuilder.lessThanOrEqualTo(column, literal)
+                }
+            }
+            is ColumnPredicate.Likeness -> {
+                column as Path<String?>
+                when (columnPredicate.operator) {
+                    LikenessOperator.LIKE -> criteriaBuilder.like(column, columnPredicate.rightLiteral)
+                    LikenessOperator.NOT_LIKE -> criteriaBuilder.notLike(column, columnPredicate.rightLiteral)
+                }
+            }
+            is ColumnPredicate.CollectionExpression -> {
+                when (columnPredicate.operator) {
+                    CollectionOperator.IN -> column.`in`(columnPredicate.rightLiteral)
+                    CollectionOperator.NOT_IN -> criteriaBuilder.not(column.`in`(columnPredicate.rightLiteral))
+                }
+            }
+            is ColumnPredicate.Between -> {
+                column as Path<Comparable<Any?>?>
+                val fromLiteral = columnPredicate.rightFromLiteral as Comparable<Any?>?
+                val toLiteral = columnPredicate.rightToLiteral as Comparable<Any?>?
+                criteriaBuilder.between(column, fromLiteral, toLiteral)
+            }
+            is ColumnPredicate.NullExpression -> {
+                when (columnPredicate.operator) {
+                    NullOperator.IS_NULL -> criteriaBuilder.isNull(column)
+                    NullOperator.NOT_NULL -> criteriaBuilder.isNotNull(column)
+                }
+            }
+        }
+    }
+
+    /**
+     * @return : Expression<Boolean> -> : Predicate
+     */
+    private fun <O, R> expressionToExpression(root: Root<O>, expression: CriteriaExpression<O, R>): Expression<R> {
+        return when (expression) {
+            is CriteriaExpression.BinaryLogical -> {
+                val leftPredicate = expressionToExpression(root, expression.left)
+                val rightPredicate = expressionToExpression(root, expression.right)
+                when (expression.operator) {
+                    BinaryLogicalOperator.AND -> criteriaBuilder.and(leftPredicate, rightPredicate) as Expression<R>
+                    BinaryLogicalOperator.OR -> criteriaBuilder.or(leftPredicate, rightPredicate) as Expression<R>
+                }
+            }
+            is CriteriaExpression.Not -> criteriaBuilder.not(expressionToExpression(root, expression.expression)) as Expression<R>
+            is CriteriaExpression.ColumnPredicateExpression<O, *> -> {
+                val column = root.get<Any?>(getColumnName(expression.column))
+                columnPredicateToPredicate(column, expression.predicate) as Expression<R>
+            }
+        }
+    }
+
+    private fun <O> expressionToPredicate(root: Root<O>, expression: CriteriaExpression<O, Boolean>): Predicate {
+        return expressionToExpression(root, expression) as Predicate
     }
 
     override fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria) : Collection<Predicate> {
@@ -136,9 +183,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         // quantity
         criteria.quantity?.let {
-            val operator = it.operator
-            val value = it.rightOperand
-            predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, vaultFungibleStates.get<Long>("quantity"), value)))
+            predicateSet.add(columnPredicateToPredicate(vaultFungibleStates.get<Long>("quantity"), it))
         }
 
         // issuer party
@@ -169,7 +214,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     override fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria) : Collection<Predicate> {
         log.trace { "Parsing LinearStateQueryCriteria: $criteria" }
 
-        var predicateSet = mutableSetOf<Predicate>()
+        val predicateSet = mutableSetOf<Predicate>()
 
         val vaultLinearStates = criteriaQuery.from(VaultSchemaV1.VaultLinearStates::class.java)
         rootEntities.putIfAbsent(VaultSchemaV1.VaultLinearStates::class.java, vaultLinearStates)
@@ -181,7 +226,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         criteria.linearId?.let {
             val uniqueIdentifiers = criteria.linearId as List<UniqueIdentifier>
             val externalIds = uniqueIdentifiers.mapNotNull { it.externalId }
-            if (externalIds.size > 0)
+            if (externalIds.isNotEmpty())
                 predicateSet.add(criteriaBuilder.and(vaultLinearStates.get<String>("externalId").`in`(externalIds)))
             predicateSet.add(criteriaBuilder.and(vaultLinearStates.get<UUID>("uuid").`in`(uniqueIdentifiers.map { it.id })))
         }
@@ -203,33 +248,20 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         return predicateSet
     }
 
-    override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): Collection<Predicate> {
+    override fun <L : PersistentState> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L>): Collection<Predicate> {
         log.trace { "Parsing VaultCustomQueryCriteria: $criteria" }
 
-        var predicateSet = mutableSetOf<Predicate>()
-        val (entityClass, attributeName, attributeValue) = resolveKotlinOrJava(criteria.indexExpression)
+        val predicateSet = mutableSetOf<Predicate>()
+        val entityClass = resolveEnclosingObjectFromExpression(criteria.expression)
 
         try {
             val entityRoot = criteriaQuery.from(entityClass)
             rootEntities.putIfAbsent(entityClass, entityRoot)
             criteriaQuery.multiselect(vaultStates)
-            val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
+            val joinPredicate = criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<PersistentStateRef>("stateRef"))
             joinPredicates.add(joinPredicate)
 
-            val operator = criteria.indexExpression.operator
-            if (criteria.indexExpression is UnaryLogicalExpression) {
-                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName))))
-            }
-            else if (criteria.indexExpression is CollectionExpression) {
-                @SuppressWarnings("unchecked")
-                val value = attributeValue as Collection<R>
-                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
-            }
-            else {
-                @SuppressWarnings("unchecked")
-                val value = attributeValue as R
-                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
-            }
+            predicateSet.add(expressionToPredicate(entityRoot, criteria.expression))
         }
         catch (e: Exception) {
             e.message?.let { message ->
@@ -242,71 +274,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
             throw VaultQueryException("Parsing error: ${e.message}")
         }
         return predicateSet
-    }
-
-    // NOTE: limitation in generics prevents using single parser for Nullable (R?) and non-Nullable (R) attribute value types
-    override fun <L : Any, R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteriaNullable<L, R>): Collection<Predicate> {
-        log.trace { "Parsing VaultCustomQueryCriteriaNullable: $criteria" }
-
-        var predicateSet = mutableSetOf<Predicate>()
-
-        val (entityClass, attributeName, attributeValue) = resolveKotlinOrJava(criteria.indexExpression)
-
-        try {
-            val entityRoot = criteriaQuery.from(entityClass)
-            rootEntities.putIfAbsent(entityClass, entityRoot)
-            criteriaQuery.multiselect(vaultStates)
-            val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<R>("stateRef")))
-            joinPredicates.add(joinPredicate)
-
-            val operator = criteria.indexExpression.operator
-            if (criteria.indexExpression is UnaryLogicalExpression) {
-                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName))))
-            }
-            else if (criteria.indexExpression is CollectionExpression) {
-                @SuppressWarnings("unchecked")
-                val values = attributeValue as Collection<R>
-                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), values)))
-            }
-            else {
-                @SuppressWarnings("unchecked")
-                val value = attributeValue as R
-                predicateSet.add(criteriaBuilder.and(parseGenericOperator(operator, entityRoot.get<R>(attributeName), value)))
-            }
-        }
-        catch (e: Exception) {
-            e.message?.let { message ->
-                if (message.contains("Not an entity"))
-                    throw VaultQueryException("""
-                    Please register the entity '${entityClass.name.substringBefore('$')}' class in your CorDapp's CordaPluginRegistry configuration (requiredSchemas attribute)
-                    and ensure you have declared (in supportedSchemas()) and mapped (in generateMappedObject()) the schema in the associated contract state's QueryableState interface implementation.
-                    See https://docs.corda.net/persistence.html?highlight=persistence for more information""")
-            }
-            throw VaultQueryException("Parsing error: ${e.message}")
-        }
-        return predicateSet
-    }
-
-    private fun resolveKotlinOrJava(expression: Logical<*, *>): Triple<Class<out PersistentState>, String, Any?> {
-        val attribute = expression.leftOperand
-
-        @SuppressWarnings("unchecked")
-        val attributeClazzNameAndValue =
-                when (attribute) {
-                    is Field -> {
-                        val value = expression.rightOperand as Object
-                        Triple(attribute.declaringClass as Class<PersistentState>, attribute.name, value)
-                    }
-                    is KMutableProperty1<*,*> -> {
-                        val attributeClazz = ((attribute as MutablePropertyReference1).owner as KClass<*>).java
-                        if (expression is UnaryLogicalExpression<*>)
-                            Triple(attributeClazz as Class<PersistentState>, attribute.name, null )
-                        else
-                            Triple(attributeClazz as Class<PersistentState>, attribute.name, expression.rightOperand )
-                    }
-                    else -> throw VaultQueryException("Unrecognised attribute specified: $attribute")
-                }
-        return attributeClazzNameAndValue
     }
 
     override fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate> {
@@ -335,64 +302,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         return predicateSet
     }
 
-    private fun <T : Comparable<T>> parseGenericOperator(operator: Operator, attribute: Path<out T>?, values: Collection<T>): Predicate? {
-        check(values.size > 0) { "$operator expects at least one argument value [$values]"}
-
-        @SuppressWarnings("unchecked")
-        val predicate =
-                when (operator) {
-                    Operator.BETWEEN -> {
-                            check(values.size == 2) { "$operator expects two argument values [$values]"}
-                            criteriaBuilder.between(attribute, values.first(), values.last())
-                        }
-                    Operator.IN -> {
-                        criteriaBuilder.`in`(attribute as Expression<in T>).value(values)
-                    }
-                    Operator.NOT_IN -> {
-                        !criteriaBuilder.`in`(attribute as Expression<in T>).value(values)
-                    }
-                    else -> throw VaultQueryException("Invalid query operator: $operator.")
-                }
-        return predicate
-    }
-
-    private fun <T : Comparable<T>> parseGenericOperator(operator: Operator, attribute: Path<out T>?, value: T): Predicate? {
-        val predicate =
-                when (operator) {
-                    Operator.EQUAL -> criteriaBuilder.equal(attribute, value)
-                    Operator.NOT_EQUAL -> criteriaBuilder.notEqual(attribute, value)
-                    Operator.GREATER_THAN -> criteriaBuilder.greaterThan(attribute, value)
-                    Operator.GREATER_THAN_OR_EQUAL -> criteriaBuilder.greaterThanOrEqualTo(attribute, value)
-                    Operator.LESS_THAN -> criteriaBuilder.lessThan(attribute, value)
-                    Operator.LESS_THAN_OR_EQUAL -> criteriaBuilder.lessThanOrEqualTo(attribute, value)
-                    Operator.LIKE -> {
-                        if (value is String)
-                            criteriaBuilder.like(attribute as Expression<String>, value)
-                        else
-                            throw VaultQueryException("operator $operator expects a SQL LIKE wildcarded expression (using '%' '_') as a String ($value)")
-                    }
-                    Operator.NOT_LIKE -> {
-                        if (value is String)
-                            criteriaBuilder.notLike(attribute as Expression<String>, value)
-                        else
-                            throw VaultQueryException("operator $operator expects a SQL LIKE wildcarded expression (using '%' '_') as a String ($value)")
-                    }
-                    else -> throw VaultQueryException("Invalid query operator: $operator.")
-                }
-        return predicate
-    }
-
-    private fun parseGenericOperator(operator: Operator, attribute: Path<out Any>?): Predicate? {
-        val predicate =
-                when (operator) {
-                    Operator.IS_NULL -> criteriaBuilder.isNull(attribute)
-                    Operator.NOT_NULL -> criteriaBuilder.isNotNull(attribute)
-                    else -> throw VaultQueryException("Invalid query operator: $operator.")
-                }
-        return predicate
-    }
-
-    override fun parse(criteria: QueryCriteria, sorting: Sort?) : Collection<Predicate> {
+    override fun parse(criteria: QueryCriteria, sorting: Sort?): Collection<Predicate> {
         val predicateSet = criteria.visit(this)
 
         sorting?.let {
@@ -400,7 +310,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                 parse(sorting)
         }
 
-        var combinedPredicates = joinPredicates.plus(predicateSet)
+        val combinedPredicates = joinPredicates.plus(predicateSet)
         criteriaQuery.where(*combinedPredicates.toTypedArray())
 
         return predicateSet

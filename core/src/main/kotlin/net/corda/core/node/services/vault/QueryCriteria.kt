@@ -8,14 +8,13 @@ import net.corda.core.identity.AbstractParty
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.vault.QueryCriteria.AndComposition
 import net.corda.core.node.services.vault.QueryCriteria.OrComposition
+import net.corda.core.schemas.PersistentState
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.serialization.OpaqueBytes
 import org.bouncycastle.asn1.x500.X500Name
-import java.security.PublicKey
 import java.time.Instant
 import java.util.*
 import javax.persistence.criteria.Predicate
-import kotlin.reflect.KMutableProperty1
 
 /**
  * Indexing assumptions:
@@ -24,6 +23,8 @@ import kotlin.reflect.KMutableProperty1
 @CordaSerializable
 sealed class QueryCriteria {
     abstract fun visit(parser: IQueryCriteriaParser): Collection<Predicate>
+
+    data class TimeCondition(val type: TimeInstantType, val predicate: ColumnPredicate<Instant>)
 
     /**
      * VaultQueryCriteria: provides query by attributes defined in [VaultSchema.VaultStates]
@@ -34,7 +35,7 @@ sealed class QueryCriteria {
             val stateRefs: List<StateRef>? = null,
             val notaryName: List<X500Name>? = null,
             val includeSoftlockedStates: Boolean = true,
-            val timeCondition: Logical<TimeInstantType, Array<Instant>>? = null) : QueryCriteria() {
+            val timeCondition: TimeCondition? = null) : QueryCriteria() {
 
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseCriteria(this)
@@ -64,7 +65,7 @@ sealed class QueryCriteria {
     data class FungibleAssetQueryCriteria @JvmOverloads constructor(
            val participants: List<AbstractParty>? = null,
            val owner: List<AbstractParty>? = null,
-           val quantity: Logical<*,Long>? = null,
+           val quantity: ColumnPredicate<Long>? = null,
            val issuerPartyName: List<AbstractParty>? = null,
            val issuerRef: List<OpaqueBytes>? = null) : QueryCriteria() {
 
@@ -79,18 +80,12 @@ sealed class QueryCriteria {
      * (see Persistence documentation for more information)
      *
      * Params
-     *  [indexExpression] refers to a (composable) JPA Query like WHERE expression clauses of the form:
+     *  [expression] refers to a (composable) JPA Query like WHERE expression clauses of the form:
      *      [JPA entityAttributeName] [Operand] [Value]
      *
      * Refer to [CommercialPaper.State] for a concrete example.
      */
-    data class VaultCustomQueryCriteria<L: Any, R : Comparable<R>>(val indexExpression: Logical<KMutableProperty1<L,R>, out R>) : QueryCriteria() {
-        override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
-            return parser.parseCriteria(this)
-        }
-    }
-
-    data class VaultCustomQueryCriteriaNullable<L: Any, R : Comparable<R>>(val indexExpression: Logical<KMutableProperty1<L,R?>, out R>) : QueryCriteria() {
+    data class VaultCustomQueryCriteria<L : PersistentState>(val expression: CriteriaExpression<L, Boolean>) : QueryCriteria() {
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseCriteria(this)
         }
@@ -120,8 +115,7 @@ sealed class QueryCriteria {
 interface IQueryCriteriaParser {
     fun parseCriteria(criteria: QueryCriteria.FungibleAssetQueryCriteria): Collection<Predicate>
     fun parseCriteria(criteria: QueryCriteria.LinearStateQueryCriteria): Collection<Predicate>
-    fun <L: Any,R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L, R>): Collection<Predicate>
-    fun <L: Any,R : Comparable<R>> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteriaNullable<L, R>): Collection<Predicate>
+    fun <L: PersistentState> parseCriteria(criteria: QueryCriteria.VaultCustomQueryCriteria<L>): Collection<Predicate>
     fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria): Collection<Predicate>
     fun parseOr(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
     fun parseAnd(left: QueryCriteria, right: QueryCriteria): Collection<Predicate>
