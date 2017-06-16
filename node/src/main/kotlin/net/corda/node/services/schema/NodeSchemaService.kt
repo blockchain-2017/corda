@@ -25,14 +25,14 @@ class NodeSchemaService(customSchemas: Set<MappedSchema> = emptySet()) : SchemaS
 
     // Currently does not support configuring schema options.
 
-    // Whitelisted tables are those required by internal Corda services
+    // Required schemas are those used by internal Corda services
     // For example, cash is used by the vault for coin selection (but will be extracted as a standalone CorDapp in future)
-    val whitelistedSchemas: Map<MappedSchema, SchemaService.SchemaOptions> =
+    val requiredSchemas: Map<MappedSchema, SchemaService.SchemaOptions> =
             mapOf(Pair(CashSchemaV1, SchemaService.SchemaOptions()),
                   Pair(CommonSchemaV1, SchemaService.SchemaOptions()),
                   Pair(VaultSchemaV1, SchemaService.SchemaOptions()))
 
-    override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = whitelistedSchemas.plus(customSchemas.map {
+    override val schemaOptions: Map<MappedSchema, SchemaService.SchemaOptions> = requiredSchemas.plus(customSchemas.map {
         mappedSchema -> Pair(mappedSchema, SchemaService.SchemaOptions())
     })
 

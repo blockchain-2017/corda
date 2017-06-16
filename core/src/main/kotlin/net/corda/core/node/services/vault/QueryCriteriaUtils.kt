@@ -89,7 +89,7 @@ class CollectionExpression<L, R>(leftOperand: L,
                               rightOperand: Collection<R>) : Logical<L, R>() {
     init {
         check(operator in setOf(Operator.IN, Operator.NOT_IN, Operator.BETWEEN),
-                { "Must use a one of the operators (${Operator.IN}, ${Operator.NOT_IN}, ${Operator.BETWEEN})"} )
+                { "Must use one of the operators (${Operator.IN}, ${Operator.NOT_IN}, ${Operator.BETWEEN})"} )
     }
 
     override val operator: Operator = operator

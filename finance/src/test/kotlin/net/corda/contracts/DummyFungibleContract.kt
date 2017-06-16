@@ -17,14 +17,9 @@ import net.corda.core.schemas.QueryableState
 import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.Emoji
-import net.corda.schemas.CashSchemaV1
 import net.corda.schemas.SampleCashSchemaV1
 import net.corda.schemas.SampleCashSchemaV2
 import net.corda.schemas.SampleCashSchemaV3
-//import net.corda.schemas.CashSchemaV2
-//import net.corda.schemas.CashSchemaV3
-import org.bouncycastle.asn1.x500.X500Name
-import java.math.BigInteger
 import java.util.*
 
 class DummyFungibleContract : OnLedgerAsset<Currency, DummyFungibleContract.Commands, DummyFungibleContract.State>() {

@@ -186,12 +186,6 @@ public class VaultQueryJavaTests {
                 Field attributeCurrency = CashSchemaV1.PersistentCashState.class.getDeclaredField("currency");
                 Field attributeQuantity = CashSchemaV1.PersistentCashState.class.getDeclaredField("pennies");
 
-                // TODO: investigate further (or provide helper function)
-               // MethodHandle
-//                Function<CashSchemaV1.PersistentCashState, String> currencyAttribute = CashSchemaV1.PersistentCashState::getCurrency;
-//                Class<? extends Function> clazz = currencyAttribute.getClass();
-//                MethodHandles.lookup().revealDirect(currencyAttribute);
-
                 Logical currencyIndex = new LogicalExpression(attributeCurrency, Operator.EQUAL, Currency.getInstance("USD"));
                 Logical quantityIndex = new LogicalExpression(attributeQuantity, Operator.GREATER_THAN_OR_EQUAL, 10L);
 
