@@ -48,7 +48,6 @@ public class VaultQueryJavaTests {
 
     @Before
     public void setUp() {
-        System.err.println("SET-UP Start");
         Properties dataSourceProps = makeTestDataSourceProperties(SecureHash.randomSHA256().toString());
         Pair<Closeable, Database> dataSourceAndDatabase = configureDatabase(dataSourceProps);
         dataSource = dataSourceAndDatabase.getFirst();
@@ -81,14 +80,11 @@ public class VaultQueryJavaTests {
 
         vaultSvc = services.getVaultService();
         vaultQuerySvc = services.getVaultQueryService();
-        System.err.println("SET-UP End");
     }
 
     @After
     public void cleanUp() throws IOException {
-        System.err.println("CLEAN-UP Before close DB");
         dataSource.close();
-        System.err.println("CLEAN-UP After close DB");
     }
 
     /**
