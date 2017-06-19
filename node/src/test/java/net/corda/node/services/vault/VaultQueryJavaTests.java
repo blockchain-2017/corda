@@ -1,56 +1,43 @@
 package net.corda.node.services.vault;
 
-import com.google.common.collect.ImmutableSet;
-import kotlin.Pair;
-import net.corda.contracts.asset.Cash;
+import com.google.common.collect.*;
+import kotlin.*;
+import net.corda.contracts.asset.*;
 import net.corda.core.contracts.*;
-import net.corda.core.crypto.SecureHash;
-import net.corda.core.identity.AbstractParty;
-import net.corda.core.node.services.Vault;
-import net.corda.core.node.services.VaultQueryException;
-import net.corda.core.node.services.VaultQueryService;
-import net.corda.core.node.services.VaultService;
+import net.corda.core.crypto.*;
+import net.corda.core.identity.*;
+import net.corda.core.node.services.*;
 import net.corda.core.node.services.vault.*;
-import net.corda.core.node.services.vault.QueryCriteria.LinearStateQueryCriteria;
-import net.corda.core.node.services.vault.QueryCriteria.VaultCustomQueryCriteria;
-import net.corda.core.node.services.vault.QueryCriteria.VaultQueryCriteria;
-import net.corda.core.serialization.OpaqueBytes;
-import net.corda.core.transactions.SignedTransaction;
-import net.corda.core.transactions.WireTransaction;
-import net.corda.node.services.database.HibernateConfiguration;
-import net.corda.node.services.schema.NodeSchemaService;
-import net.corda.node.services.vault.schemas.jpa.VaultSchemaV1;
-import net.corda.schemas.CashSchemaV1;
-import net.corda.testing.node.MockServices;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.exposed.sql.Database;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
+import net.corda.core.node.services.vault.QueryCriteria.*;
+import net.corda.core.schemas.*;
+import net.corda.core.serialization.*;
+import net.corda.core.transactions.*;
+import net.corda.node.services.database.*;
+import net.corda.node.services.schema.*;
+import net.corda.node.services.vault.schemas.jpa.*;
+import net.corda.schemas.*;
+import net.corda.testing.node.*;
+import org.jetbrains.annotations.*;
+import org.jetbrains.exposed.sql.*;
+import org.junit.*;
 import rx.Observable;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.lang.reflect.Field;
+import java.io.*;
+import java.lang.reflect.*;
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
+import java.util.stream.*;
 
-import static net.corda.contracts.asset.CashKt.getDUMMY_CASH_ISSUER;
-import static net.corda.contracts.asset.CashKt.getDUMMY_CASH_ISSUER_KEY;
+import static net.corda.contracts.asset.CashKt.*;
 import static net.corda.contracts.testing.VaultFiller.*;
 import static net.corda.core.node.services.vault.QueryCriteriaKt.*;
 import static net.corda.core.node.services.vault.QueryCriteriaUtilsKt.*;
-import static net.corda.core.utilities.TestConstants.getDUMMY_NOTARY;
-import static net.corda.node.utilities.DatabaseSupportKt.configureDatabase;
+import static net.corda.core.utilities.TestConstants.*;
+import static net.corda.node.utilities.DatabaseSupportKt.*;
 import static net.corda.node.utilities.DatabaseSupportKt.transaction;
-import static net.corda.testing.CoreTestUtils.getMEGA_CORP;
-import static net.corda.testing.node.MockServicesKt.makeTestDataSourceProperties;
-import static org.assertj.core.api.Assertions.assertThat;
+import static net.corda.testing.CoreTestUtils.*;
+import static net.corda.testing.node.MockServicesKt.*;
+import static org.assertj.core.api.Assertions.*;
 
-@Ignore
 public class VaultQueryJavaTests {
 
     private MockServices services;
@@ -61,22 +48,23 @@ public class VaultQueryJavaTests {
 
     @Before
     public void setUp() {
+        System.err.println("SET-UP Start");
         Properties dataSourceProps = makeTestDataSourceProperties(SecureHash.randomSHA256().toString());
         Pair<Closeable, Database> dataSourceAndDatabase = configureDatabase(dataSourceProps);
         dataSource = dataSourceAndDatabase.getFirst();
         database = dataSourceAndDatabase.getSecond();
 
-        transaction(database, statement -> services = new MockServices() {
+        Set<MappedSchema> customSchemas = new HashSet<>(Arrays.asList(DummyLinearStateSchemaV1.INSTANCE));
+        HibernateConfiguration hibernateConfig = new HibernateConfiguration(new NodeSchemaService(customSchemas));
+        transaction(database, statement -> services = new MockServices(getMEGA_CORP_KEY()) {
             @NotNull
             @Override
             public VaultService getVaultService() {
-                HibernateConfiguration config = new HibernateConfiguration(new NodeSchemaService());
-                return makeVaultService(dataSourceProps, config);
+                return makeVaultService(dataSourceProps, hibernateConfig);
             }
 
             @Override
             public VaultQueryService getVaultQueryService() {
-                HibernateConfiguration hibernateConfig = new HibernateConfiguration(new NodeSchemaService());
                 return new HibernateVaultQueryImpl(hibernateConfig, getVaultService().getUpdatesPublisher());
             }
 
@@ -93,11 +81,14 @@ public class VaultQueryJavaTests {
 
         vaultSvc = services.getVaultService();
         vaultQuerySvc = services.getVaultQueryService();
+        System.err.println("SET-UP End");
     }
 
     @After
     public void cleanUp() throws IOException {
+        System.err.println("CLEAN-UP Before close DB");
         dataSource.close();
+        System.err.println("CLEAN-UP After close DB");
     }
 
     /**
@@ -147,13 +138,18 @@ public class VaultQueryJavaTests {
         transaction(database, tx -> {
 
             Vault<LinearState> states = fillWithSomeTestLinearStates(services, 10, null);
-            UniqueIdentifier uid = states.getStates().iterator().next().component1().getData().getLinearId();
+            StateAndRef<LinearState> linearState = states.getStates().iterator().next();
+            UniqueIdentifier uid = linearState.component1().getData().getLinearId();
 
             List<String> dealIds = Arrays.asList("123", "456", "789");
-            fillWithSomeTestDeals(services, dealIds);
+            Vault<DealState> dealStates = fillWithSomeTestDeals(services, dealIds);
+
+            // consume states
+            consumeDeals(services, (List<? extends StateAndRef<? extends DealState>>) dealStates.getStates());
+            consumeLinearStates(services, Arrays.asList(linearState));
 
             // DOCSTART VaultJavaQueryExample2
-            Vault.StateStatus status = Vault.StateStatus.UNCONSUMED;
+            Vault.StateStatus status = Vault.StateStatus.CONSUMED;
             @SuppressWarnings("unchecked")
             Set<Class<LinearState>> contractStateTypes = new HashSet(Collections.singletonList(LinearState.class));
 
@@ -199,7 +195,7 @@ public class VaultQueryJavaTests {
                 Field attributeCurrency = CashSchemaV1.PersistentCashState.class.getDeclaredField("currency");
                 Field attributeQuantity = CashSchemaV1.PersistentCashState.class.getDeclaredField("pennies");
 
-                CriteriaExpression currencyIndex = Builder.INSTANCE.equal(attributeCurrency, Currency.getInstance("USD"));
+                CriteriaExpression currencyIndex = Builder.INSTANCE.equal(attributeCurrency, "USD");
                 CriteriaExpression quantityIndex = Builder.INSTANCE.greaterThanOrEqual(attributeQuantity, 10L);
 
                 QueryCriteria customCriteria2 = new VaultCustomQueryCriteria(quantityIndex);
@@ -265,14 +261,19 @@ public class VaultQueryJavaTests {
 
             // DOCSTART VaultJavaQueryExample2
             @SuppressWarnings("unchecked")
-            Set<Class<ContractState>> contractStateTypes = new HashSet(Collections.singletonList(DealState.class));
+            Set<Class<ContractState>> contractStateTypes = new HashSet(Arrays.asList(DealState.class, LinearState.class));
             QueryCriteria vaultCriteria = new VaultQueryCriteria(Vault.StateStatus.UNCONSUMED, contractStateTypes);
 
             List<UniqueIdentifier> linearIds = Arrays.asList(uid);
             List<AbstractParty> dealParty = Arrays.asList(getMEGA_CORP());
-            QueryCriteria dealCriteriaAll = new LinearStateQueryCriteria(dealParty, linearIds, dealIds);
+            QueryCriteria dealCriteria = new LinearStateQueryCriteria(dealParty, null, dealIds);
 
-            QueryCriteria compositeCriteria = and(dealCriteriaAll, vaultCriteria);
+            QueryCriteria linearCriteria = new LinearStateQueryCriteria(dealParty, linearIds, null);
+
+
+            QueryCriteria dealOrLinearIdCriteria = or(dealCriteria, linearCriteria);
+
+            QueryCriteria compositeCriteria = and(dealOrLinearIdCriteria, vaultCriteria);
 
             PageSpecification pageSpec  = new PageSpecification(0, getMAX_PAGE_SIZE());
             Sort.SortColumn sortByUid = new Sort.SortColumn(VaultSchemaV1.VaultLinearStates.class, "uuid", Sort.Direction.DESC, Sort.NullHandling.NULLS_NONE);
@@ -296,6 +297,7 @@ public class VaultQueryJavaTests {
     @Test
     public void consumedStatesDeprecated() {
         transaction(database, tx -> {
+            Amount<Currency> amount = new Amount<>(100, Currency.getInstance("USD"));
             fillWithSomeTestCash(services,
                     new Amount<>(100, Currency.getInstance("USD")),
                     getDUMMY_NOTARY(),
@@ -306,6 +308,8 @@ public class VaultQueryJavaTests {
                     null,
                     getDUMMY_CASH_ISSUER(),
                     getDUMMY_CASH_ISSUER_KEY() );
+
+            consumeCash(services, amount);
 
             // DOCSTART VaultDeprecatedJavaQueryExample1
             @SuppressWarnings("unchecked")
@@ -326,24 +330,19 @@ public class VaultQueryJavaTests {
     public void consumedStatesForLinearIdDeprecated() {
         transaction(database, tx -> {
 
-            Vault<LinearState> states = fillWithSomeTestLinearStates(services, 1, null);
-            UniqueIdentifier trackUid = states.getStates().iterator().next().component1().getData().getLinearId();
-            fillWithSomeTestLinearStates(services, 4,null);
+            Vault<LinearState> linearStates = fillWithSomeTestLinearStates(services, 4,null);
+            UniqueIdentifier trackUid = linearStates.getStates().iterator().next().component1().getData().getLinearId();
+
+            consumeLinearStates(services, (List<? extends StateAndRef<? extends LinearState>>) linearStates.getStates());
 
             // DOCSTART VaultDeprecatedJavaQueryExample2
             @SuppressWarnings("unchecked")
-            Set<Class<ContractState>> contractStateTypes = new HashSet(Collections.singletonList(LinearState.class));
+            Set<Class<LinearState>> contractStateTypes = new HashSet(Collections.singletonList(DummyLinearContract.State.class));
             EnumSet<Vault.StateStatus> status = EnumSet.of(Vault.StateStatus.CONSUMED);
 
             // WARNING! unfortunately cannot use inlined reified Kotlin extension methods.
-            Iterable<StateAndRef<ContractState>> results = vaultSvc.states(contractStateTypes, status, true);
-
-            Stream<StateAndRef<ContractState>> trackedLinearState = StreamSupport.stream(results.spliterator(), false).filter(
-                    state -> ((LinearState) state.component1().getData()).getLinearId() == trackUid);
-            // DOCEND VaultDeprecatedJavaQueryExample2
-
+            Iterable<StateAndRef<LinearState>> results = vaultSvc.states(contractStateTypes, status, true);
             assertThat(results).hasSize(4);
-            assertThat(trackedLinearState).hasSize(1);
 
             return tx;
         });

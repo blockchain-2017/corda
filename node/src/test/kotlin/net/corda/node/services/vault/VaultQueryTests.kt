@@ -890,7 +890,7 @@ abstract class VaultQueryTests {
             val results = vaultQuerySvc.queryBy<LinearState>(compositeCriteria, sorting = sorting)
             results.states.forEach {
                 if (it.state.data is DummyDealContract.State)
-                    println("${(it.state.data as DealState)?.ref}, ${it.state.data.linearId}") }
+                    println("${(it.state.data as DealState).ref}, ${it.state.data.linearId}") }
             assertThat(results.states).hasSize(4)
         }
     }

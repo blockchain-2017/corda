@@ -695,9 +695,9 @@ class HibernateConfigurationTest {
         val queryResults = entityManager.createQuery(criteriaQuery).resultList
         queryResults.map {
             val vaultState = it[0] as VaultSchemaV1.VaultStates
-            val vaultLinearStates = it[1] as VaultSchemaV1.VaultLinearStates
-            val dummyLinearStates = it[2] as DummyLinearStateSchemaV1.PersistentDummyLinearState
-            println("${vaultState.stateRef} : [${dummyLinearStates.externalId} ${dummyLinearStates.uuid}] : [${vaultLinearStates.externalId} ${vaultLinearStates.uuid}]")
+            val _vaultLinearStates = it[1] as VaultSchemaV1.VaultLinearStates
+            val _dummyLinearStates = it[2] as DummyLinearStateSchemaV1.PersistentDummyLinearState
+            println("${vaultState.stateRef} : [${_dummyLinearStates.externalId} ${_dummyLinearStates.uuid}] : [${_vaultLinearStates.externalId} ${_vaultLinearStates.uuid}]")
         }
 
         // order by ASC
@@ -708,9 +708,9 @@ class HibernateConfigurationTest {
         val queryResultsAsc = entityManager.createQuery(criteriaQuery).resultList
         queryResultsAsc.map {
             val vaultState = it[0] as VaultSchemaV1.VaultStates
-            val vaultLinearStates = it[1] as VaultSchemaV1.VaultLinearStates
-            val dummyLinearStates = it[2] as DummyLinearStateSchemaV1.PersistentDummyLinearState
-            println("${vaultState.stateRef} : [${dummyLinearStates.externalId} ${dummyLinearStates.uuid}] : [${vaultLinearStates.externalId} ${vaultLinearStates.uuid}]")
+            val _vaultLinearStates = it[1] as VaultSchemaV1.VaultLinearStates
+            val _dummyLinearStates = it[2] as DummyLinearStateSchemaV1.PersistentDummyLinearState
+            println("${vaultState.stateRef} : [${_dummyLinearStates.externalId} ${_dummyLinearStates.uuid}] : [${_vaultLinearStates.externalId} ${_vaultLinearStates.uuid}]")
         }
 
         assertThat(queryResults).hasSize(6)

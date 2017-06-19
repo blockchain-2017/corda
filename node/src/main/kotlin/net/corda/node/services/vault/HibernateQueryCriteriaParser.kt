@@ -31,16 +31,13 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     }
 
     // incrementally build list of join predicates
-    private var joinPredicates = mutableListOf<Predicate>()
+    private val joinPredicates = mutableListOf<Predicate>()
     // incrementally build list of root entities (for later use in Sort parsing)
-    private var rootEntities = mutableMapOf<Class<out PersistentState>, Root<*>>()
+    private val rootEntities = mutableMapOf<Class<out PersistentState>, Root<*>>()
 
     override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) : Collection<Predicate> {
         log.trace { "Parsing VaultQueryCriteria: $criteria" }
         val predicateSet = mutableSetOf<Predicate>()
-
-        rootEntities.putIfAbsent(VaultSchemaV1.VaultStates::class.java, vaultStates)
-        criteriaQuery.multiselect(vaultStates)
 
         // state status
         if (criteria.status == Vault.StateStatus.ALL)
@@ -168,9 +165,8 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         val vaultFungibleStates = criteriaQuery.from(VaultSchemaV1.VaultFungibleStates::class.java)
         rootEntities.putIfAbsent(VaultSchemaV1.VaultFungibleStates::class.java, vaultFungibleStates)
-        criteriaQuery.multiselect(vaultStates)
 
-        val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultFungibleStates.get<PersistentStateRef>("stateRef")))
+        val joinPredicate = criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultFungibleStates.get<PersistentStateRef>("stateRef"))
         predicateSet.add(joinPredicate)
 
         // owner
@@ -218,8 +214,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
 
         val vaultLinearStates = criteriaQuery.from(VaultSchemaV1.VaultLinearStates::class.java)
         rootEntities.putIfAbsent(VaultSchemaV1.VaultLinearStates::class.java, vaultLinearStates)
-        criteriaQuery.multiselect(vaultStates)
-        val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultLinearStates.get<PersistentStateRef>("stateRef")))
+        val joinPredicate = criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), vaultLinearStates.get<PersistentStateRef>("stateRef"))
         joinPredicates.add(joinPredicate)
 
         // linear ids
@@ -257,7 +252,6 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         try {
             val entityRoot = criteriaQuery.from(entityClass)
             rootEntities.putIfAbsent(entityClass, entityRoot)
-            criteriaQuery.multiselect(vaultStates)
             val joinPredicate = criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<PersistentStateRef>("stateRef"))
             joinPredicates.add(joinPredicate)
 
@@ -283,7 +277,7 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
         val leftPredicates = parse(left)
         val rightPredicates = parse(right)
 
-        val orPredicate = criteriaBuilder.and(criteriaBuilder.or(*leftPredicates.toTypedArray(), *rightPredicates.toTypedArray()))
+        val orPredicate = criteriaBuilder.or(*leftPredicates.toTypedArray(), *rightPredicates.toTypedArray())
         predicateSet.add(orPredicate)
 
         return predicateSet
@@ -310,6 +304,8 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                 parse(sorting)
         }
 
+        val selections = listOf(vaultStates).plus(rootEntities.map { it.value })
+        criteriaQuery.multiselect(selections)
         val combinedPredicates = joinPredicates.plus(predicateSet)
         criteriaQuery.where(*combinedPredicates.toTypedArray())
 
@@ -327,10 +323,9 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
                     rootEntities.getOrElse(entityStateClass) {
                         // scenario where sorting on attributes not parsed as criteria
                         val entityRoot = criteriaQuery.from(entityStateClass)
-                        criteriaQuery.multiselect(vaultStates, entityRoot)
-                        val joinPredicate = criteriaBuilder.and(criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<PersistentStateRef>("stateRef")))
-                        joinPredicates.add(joinPredicate)
                         rootEntities.put(entityStateClass, entityRoot)
+                        val joinPredicate = criteriaBuilder.equal(vaultStates.get<PersistentStateRef>("stateRef"), entityRoot.get<PersistentStateRef>("stateRef"))
+                        joinPredicates.add(joinPredicate)
                         entityRoot
                     }
             if (nullHandling != Sort.NullHandling.NULLS_NONE)
