@@ -1,5 +1,8 @@
-package net.corda.core.contracts
+package net.corda.contracts
 
+import net.corda.core.contracts.Contract
+import net.corda.core.contracts.TransactionForContract
+import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.crypto.*
 import net.corda.core.identity.AbstractParty
 import net.corda.core.identity.Party

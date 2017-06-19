@@ -1,7 +1,7 @@
 package net.corda.node.services.schema
 
+import net.corda.contracts.DealState
 import net.corda.core.contracts.ContractState
-import net.corda.core.contracts.DealState
 import net.corda.core.contracts.FungibleAsset
 import net.corda.core.contracts.LinearState
 import net.corda.core.schemas.MappedSchema

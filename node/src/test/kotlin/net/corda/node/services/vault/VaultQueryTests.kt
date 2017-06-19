@@ -1,6 +1,9 @@
 package net.corda.node.services.vault
 
 import net.corda.contracts.CommercialPaper
+import net.corda.contracts.Commodity
+import net.corda.contracts.DealState
+import net.corda.contracts.DummyDealContract
 import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.DUMMY_CASH_ISSUER
 import net.corda.contracts.testing.*
@@ -682,7 +685,7 @@ abstract class VaultQueryTests {
         database.transaction {
 
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
-            services.fillWithSomeTestCommodity(FCOJ(100))
+            services.fillWithSomeTestCommodity(Amount(100, Commodity.getInstance("FCOJ")!!))
             services.fillWithSomeTestLinearStates(10)
 
             val results = vaultQuerySvc.queryBy<FungibleAsset<*>>()
@@ -696,7 +699,7 @@ abstract class VaultQueryTests {
 
             services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
             services.consumeCash(50.DOLLARS)
-            services.fillWithSomeTestCommodity(FCOJ(100))
+            services.fillWithSomeTestCommodity(Amount(100, Commodity.getInstance("FCOJ")!!))
             services.fillWithSomeTestLinearStates(10)
 
             val criteria = VaultQueryCriteria(status = Vault.StateStatus.CONSUMED)

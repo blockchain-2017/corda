@@ -2,7 +2,9 @@
 
 package net.corda.contracts.testing
 
+import net.corda.contracts.Commodity
 import net.corda.contracts.DealState
+import net.corda.contracts.DummyDealContract
 import net.corda.contracts.asset.*
 import net.corda.core.contracts.*
 import net.corda.core.identity.AbstractParty
@@ -17,7 +19,6 @@ import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import java.security.KeyPair
 import java.security.PublicKey
-import java.security.Timestamp
 import java.time.Instant
 import java.time.Instant.now
 import java.util.*
@@ -129,11 +130,11 @@ fun ServiceHub.fillWithSomeTestCash(howMuch: Amount<Currency>,
 
 // TODO: need to make all FungibleAsset commands (issue, move, exit) generic
 fun ServiceHub.fillWithSomeTestCommodity(amount: Amount<Commodity>,
-                                    outputNotary: Party = DUMMY_NOTARY,
-                                    ref: OpaqueBytes = OpaqueBytes(ByteArray(1, { 1 })),
-                                    ownedBy: AbstractParty? = null,
-                                    issuedBy: PartyAndReference = DUMMY_OBLIGATION_ISSUER.ref(1),
-                                    issuerKey: KeyPair = DUMMY_OBLIGATION_ISSUER_KEY): Vault<CommodityContract.State> {
+                                         outputNotary: Party = DUMMY_NOTARY,
+                                         ref: OpaqueBytes = OpaqueBytes(ByteArray(1, { 1 })),
+                                         ownedBy: AbstractParty? = null,
+                                         issuedBy: PartyAndReference = DUMMY_OBLIGATION_ISSUER.ref(1),
+                                         issuerKey: KeyPair = DUMMY_OBLIGATION_ISSUER_KEY): Vault<CommodityContract.State> {
     val myKey: PublicKey = ownedBy?.owningKey ?: myInfo.legalIdentity.owningKey
     val me = AnonymousParty(myKey)
 

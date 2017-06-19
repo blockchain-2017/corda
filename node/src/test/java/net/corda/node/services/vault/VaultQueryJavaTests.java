@@ -2,6 +2,7 @@ package net.corda.node.services.vault;
 
 import com.google.common.collect.*;
 import kotlin.*;
+import net.corda.contracts.*;
 import net.corda.contracts.asset.*;
 import net.corda.core.contracts.*;
 import net.corda.core.crypto.*;
