@@ -675,7 +675,7 @@ abstract class VaultQueryTests {
             assertThat(states).hasSize(20)
             assertThat(metadata.first().contractStateClassName).isEqualTo("net.corda.core.contracts.DummyLinearContract\$State")
             assertThat(metadata.first().status).isEqualTo(Vault.StateStatus.UNCONSUMED) // 0 = UNCONSUMED
-            assertThat(metadata.last().contractStateClassName).isEqualTo("net.corda.contracts.asset.Cash\$State")
+            assertThat(metadata.last().contractStateClassName).isEqualTo("net.corda.contracts.DummyDealContract\$State")
             assertThat(metadata.last().status).isEqualTo(Vault.StateStatus.CONSUMED)    // 1 = CONSUMED
         }
     }
