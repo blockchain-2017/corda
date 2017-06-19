@@ -1,6 +1,5 @@
 package net.corda.node.services.vault
 
-import io.requery.kotlin.between
 import net.corda.contracts.CommercialPaper
 import net.corda.contracts.asset.Cash
 import net.corda.contracts.asset.DUMMY_CASH_ISSUER
@@ -25,14 +24,12 @@ import net.corda.schemas.CashSchemaV1
 import net.corda.schemas.CashSchemaV1.PersistentCashState
 import net.corda.schemas.CommercialPaperSchemaV1
 import net.corda.schemas.SampleCashSchemaV3
-import net.corda.schemas.SampleCommercialPaperSchemaV2
 import net.corda.testing.*
 import net.corda.testing.node.MockServices
 import org.assertj.core.api.Assertions
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.bouncycastle.asn1.x500.X500Name
-import org.hibernate.criterion.LogicalExpression
 import org.jetbrains.exposed.sql.Database
 import org.junit.Ignore
 import org.junit.Test
@@ -430,21 +427,6 @@ abstract class VaultQueryTests {
         }
     }
 
-//    @Test(expected = VaultQueryException::class)
-//    fun `BAD logical operator BETWEEN`() {
-//        database.transaction {
-//
-//            services.fillWithSomeTestCash(1.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
-//            services.fillWithSomeTestCash(10.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
-//            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
-//
-//            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.BETWEEN, 100L)
-//            val criteria = VaultCustomQueryCriteria(logicalExpression)
-//            val results = vaultQuerySvc.queryBy<Cash.State>(criteria)
-//            assertThat(results.states).hasSize(1)
-//        }
-//    }
-
     @Test
     fun `logical operator IN`() {
         database.transaction {
@@ -491,20 +473,6 @@ abstract class VaultQueryTests {
             assertThat(results.states).hasSize(1)
         }
     }
-
-//    @Test(expected = VaultQueryException::class)
-//    fun `BAD logical operator LIKE`() {
-//        database.transaction {
-//
-//            services.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 1, 1, Random(0L))
-//            services.fillWithSomeTestCash(100.POUNDS, DUMMY_NOTARY, 1, 1, Random(0L))
-//            services.fillWithSomeTestCash(100.SWISS_FRANCS, DUMMY_NOTARY, 1, 1, Random(0L))
-//
-//            val logicalExpression = LogicalExpression(CashSchemaV1.PersistentCashState::pennies, Operator.LIKE, 123L)
-//            val criteria = VaultCustomQueryCriteria(logicalExpression)
-//            vaultQuerySvc.queryBy<Cash.State>(criteria)
-//        }
-//    }
 
     @Test
     fun `logical operator NOT LIKE`() {
