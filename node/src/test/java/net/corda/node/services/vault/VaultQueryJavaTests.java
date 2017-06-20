@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.*;
 public class VaultQueryJavaTests {
 
     private MockServices services;
-    private VaultService vaultSvc;
+    VaultService vaultSvc;
     private VaultQueryService vaultQuerySvc;
     private Closeable dataSource;
     private Database database;
@@ -56,31 +56,34 @@ public class VaultQueryJavaTests {
 
         Set<MappedSchema> customSchemas = new HashSet<>(Arrays.asList(DummyLinearStateSchemaV1.INSTANCE));
         HibernateConfiguration hibernateConfig = new HibernateConfiguration(new NodeSchemaService(customSchemas));
-        transaction(database, statement -> services = new MockServices(getMEGA_CORP_KEY()) {
-            @NotNull
-            @Override
-            public VaultService getVaultService() {
-                return makeVaultService(dataSourceProps, hibernateConfig);
-            }
+        transaction(database,
+                    statement -> { services = new MockServices(getMEGA_CORP_KEY()) {
+                        @NotNull
+                        @Override
+                        public VaultService getVaultService() {
+                            return makeVaultService(dataSourceProps, hibernateConfig);
+                        }
 
-            @Override
-            public VaultQueryService getVaultQueryService() {
-                return new HibernateVaultQueryImpl(hibernateConfig, getVaultService().getUpdatesPublisher());
-            }
+                        @Override
+                        public VaultQueryService getVaultQueryService() {
+                            return new HibernateVaultQueryImpl(hibernateConfig, getVaultService().getUpdatesPublisher());
+                        }
 
-            @Override
-            public void recordTransactions(@NotNull Iterable<SignedTransaction> txs) {
-                for (SignedTransaction stx : txs ) {
-                    getStorageService().getValidatedTransactions().addTransaction(stx);
-                }
+                        @Override
+                        public void recordTransactions(@NotNull Iterable<SignedTransaction> txs) {
+                            for (SignedTransaction stx : txs) {
+                                getStorageService().getValidatedTransactions().addTransaction(stx);
+                            }
 
-                Stream<WireTransaction> wtxn = StreamSupport.stream(txs.spliterator(), false).map(txn -> txn.getTx());
-                getVaultService().notifyAll(wtxn.collect(Collectors.toList()));
-            }
+                            Stream<WireTransaction> wtxn = StreamSupport.stream(txs.spliterator(), false).map(txn -> txn.getTx());
+                            getVaultService().notifyAll(wtxn.collect(Collectors.toList()));
+                        }
+                    };
+            vaultSvc = services.getVaultService();
+            vaultQuerySvc = services.getVaultQueryService();
+
+            return services;
         });
-
-        vaultSvc = services.getVaultService();
-        vaultQuerySvc = services.getVaultQueryService();
     }
 
     @After
