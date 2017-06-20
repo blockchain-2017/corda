@@ -90,7 +90,7 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration,
                             statesAndRefs.add(StateAndRef(state, stateRef))
                         }
 
-                return Vault.Page(states = statesAndRefs, statesMetadata = statesMeta, pageable = paging, totalStatesAvailable = totalStates) as Vault.Page<T>
+                return Vault.Page(states = statesAndRefs, statesMetadata = statesMeta, pageable = paging, stateTypes = criteriaParser.stateTypes, totalStatesAvailable = totalStates) as Vault.Page<T>
 
             } catch (e: Exception) {
                 log.error(e.message)
@@ -104,8 +104,10 @@ class HibernateVaultQueryImpl(hibernateConfig: HibernateConfiguration,
     @Throws(VaultQueryException::class)
     override fun <T : ContractState> _trackBy(criteria: QueryCriteria, paging: PageSpecification, sorting: Sort, contractType: Class<out ContractState>): Vault.PageAndUpdates<T> {
         return mutex.locked {
-            Vault.PageAndUpdates(_queryBy<T>(criteria, paging, sorting, contractType),
-                                 updatesPublisher.bufferUntilSubscribed().wrapWithDatabaseTransaction())
+            val snapshotResults = _queryBy<T>(criteria, paging, sorting, contractType)
+            Vault.PageAndUpdates(snapshotResults,
+                                 updatesPublisher.bufferUntilSubscribed()
+                                         .filter { it.containsType(contractType, snapshotResults.stateTypes) } )
         }
     }
 

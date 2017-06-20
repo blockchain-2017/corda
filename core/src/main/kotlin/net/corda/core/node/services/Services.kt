@@ -3,7 +3,6 @@ package net.corda.core.node.services
 import co.paralleluniverse.fibers.Suspendable
 import com.google.common.util.concurrent.ListenableFuture
 import net.corda.core.contracts.*
-import net.corda.core.crypto.*
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.DigitalSignature
@@ -70,6 +69,15 @@ class Vault<out T : ContractState>(val states: Iterable<StateAndRef<T>>) {
         /** Checks whether the update contains a state of the specified type. */
         inline fun <reified T : ContractState> containsType() = consumed.any { it.state.data is T } || produced.any { it.state.data is T }
 
+        /** Checks whether the update contains a state of the specified type and state status */
+        fun <T : ContractState> containsType(clazz: Class<T>, status: StateStatus) =
+                when(status) {
+                    StateStatus.UNCONSUMED -> produced.any { clazz.isAssignableFrom(it.state.data.javaClass) }
+                    StateStatus.CONSUMED -> consumed.any { clazz.isAssignableFrom(it.state.data.javaClass)  }
+                    else -> consumed.any { clazz.isAssignableFrom(it.state.data.javaClass) }
+                            || produced.any { clazz.isAssignableFrom(it.state.data.javaClass) }
+                }
+
         /**
          * Combine two updates into a single update with the combined inputs and outputs of the two updates but net
          * any outputs of the left-hand-side (this) that are consumed by the inputs of the right-hand-side (rhs).
@@ -116,9 +124,10 @@ class Vault<out T : ContractState>(val states: Iterable<StateAndRef<T>>) {
      */
     @CordaSerializable
     data class Page<out T : ContractState>(val states: List<StateAndRef<T>>,
-                                           val statesMetadata: List<Vault.StateMetadata>,
+                                           val statesMetadata: List<StateMetadata>,
                                            val pageable: PageSpecification,
-                                           val totalStatesAvailable: Int)
+                                           val totalStatesAvailable: Int,
+                                           val stateTypes: StateStatus)
 
     @CordaSerializable
     data class StateMetadata(val ref: StateRef,

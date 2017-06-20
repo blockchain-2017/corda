@@ -35,11 +35,14 @@ class HibernateQueryCriteriaParser(val contractType: Class<out ContractState>,
     // incrementally build list of root entities (for later use in Sort parsing)
     private val rootEntities = mutableMapOf<Class<out PersistentState>, Root<*>>()
 
+    var stateTypes: Vault.StateStatus = Vault.StateStatus.UNCONSUMED
+
     override fun parseCriteria(criteria: QueryCriteria.VaultQueryCriteria) : Collection<Predicate> {
         log.trace { "Parsing VaultQueryCriteria: $criteria" }
         val predicateSet = mutableSetOf<Predicate>()
 
         // state status
+        stateTypes = criteria.status
         if (criteria.status == Vault.StateStatus.ALL)
             predicateSet.add(vaultStates.get<Vault.StateStatus>("stateStatus").`in`(setOf(Vault.StateStatus.UNCONSUMED, Vault.StateStatus.CONSUMED)))
         else
