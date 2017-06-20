@@ -125,7 +125,7 @@ interface CordaRPCOps : RPCOps {
      */
     @RPCReturnsObservables
     // TODO: Remove this from the interface
-    // @Deprecated("This function will be removed in a future milestone", ReplaceWith("vaultTrackBy(QueryCriteria())"))
+    @Deprecated("This function will be removed in a future milestone", ReplaceWith("vaultTrackBy(QueryCriteria())"))
     fun vaultAndUpdates(): Pair<List<StateAndRef<ContractState>>, Observable<Vault.Update>>
 
     /**
