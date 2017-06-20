@@ -6,16 +6,19 @@ import java.lang.reflect.Field
 import kotlin.reflect.KProperty1
 import kotlin.reflect.jvm.javaField
 
+@CordaSerializable
 enum class BinaryLogicalOperator {
     AND,
     OR
 }
 
+@CordaSerializable
 enum class EqualityComparisonOperator {
     EQUAL,
     NOT_EQUAL
 }
 
+@CordaSerializable
 enum class BinaryComparisonOperator {
     LESS_THAN,
     LESS_THAN_OR_EQUAL,
@@ -23,32 +26,38 @@ enum class BinaryComparisonOperator {
     GREATER_THAN_OR_EQUAL,
 }
 
+@CordaSerializable
 enum class NullOperator {
     IS_NULL,
     NOT_NULL
 }
 
+@CordaSerializable
 enum class LikenessOperator {
     LIKE,
     NOT_LIKE
 }
 
+@CordaSerializable
 enum class CollectionOperator {
     IN,
     NOT_IN
 }
 
+@CordaSerializable
 sealed class CriteriaExpression<O, out T> {
     data class BinaryLogical<O>(val left: CriteriaExpression<O, Boolean>, val right: CriteriaExpression<O, Boolean>, val operator: BinaryLogicalOperator) : CriteriaExpression<O, Boolean>()
     data class Not<O>(val expression: CriteriaExpression<O, Boolean>) : CriteriaExpression<O, Boolean>()
     data class ColumnPredicateExpression<O, C>(val column: Column<O, C>, val predicate: ColumnPredicate<C>) : CriteriaExpression<O, Boolean>()
 }
 
+@CordaSerializable
 sealed class Column<O, out C> {
     data class Java<O, out C>(val field: Field) : Column<O, C>()
     data class Kotlin<O, out C>(val property: KProperty1<O, C?>) : Column<O, C>()
 }
 
+@CordaSerializable
 sealed class ColumnPredicate<C> {
     data class EqualityComparison<C>(val operator: EqualityComparisonOperator, val rightLiteral: C) : ColumnPredicate<C>()
     data class BinaryComparison<C : Comparable<C>>(val operator: BinaryComparisonOperator, val rightLiteral: C) : ColumnPredicate<C>()
@@ -140,6 +149,7 @@ data class Sort(val columns: Collection<SortColumn>) {
     //  if (direction == Sort.Direction.ASC) Sort.NullHandling.NULLS_LAST else Sort.NullHandling.NULLS_FIRST)
 }
 
+@CordaSerializable
 object Builder {
 
     fun <R : Comparable<R>> compare(operator: BinaryComparisonOperator, value: R) = ColumnPredicate.BinaryComparison(operator, value)
