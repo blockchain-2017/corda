@@ -188,10 +188,10 @@ public class VaultQueryJavaTests {
             fillWithSomeTestCash(services, dollars10, getDUMMY_NOTARY(), 1, 1, new Random(0L), new OpaqueBytes("1".getBytes()), null, getDUMMY_CASH_ISSUER(), getDUMMY_CASH_ISSUER_KEY());
             fillWithSomeTestCash(services, dollars1, getDUMMY_NOTARY(), 1, 1, new Random(0L), new OpaqueBytes("1".getBytes()), null, getDUMMY_CASH_ISSUER(), getDUMMY_CASH_ISSUER_KEY());
 
-            // DOCSTART VaultJavaQueryExample3
-            QueryCriteria generalCriteria = new VaultQueryCriteria(Vault.StateStatus.ALL);
-
             try {
+                // DOCSTART VaultJavaQueryExample3
+                QueryCriteria generalCriteria = new VaultQueryCriteria(Vault.StateStatus.ALL);
+
                 Field attributeCurrency = CashSchemaV1.PersistentCashState.class.getDeclaredField("currency");
                 Field attributeQuantity = CashSchemaV1.PersistentCashState.class.getDeclaredField("pennies");
 
@@ -232,7 +232,7 @@ public class VaultQueryJavaTests {
                     getDUMMY_CASH_ISSUER(),
                     getDUMMY_CASH_ISSUER_KEY() );
 
-            // DOCSTART VaultJavaQueryExample1
+            // DOCSTART VaultJavaQueryExample4
             @SuppressWarnings("unchecked")
             Set<Class<ContractState>> contractStateTypes = new HashSet(Collections.singletonList(Cash.State.class));
 
@@ -242,7 +242,7 @@ public class VaultQueryJavaTests {
             Vault.Page<ContractState> snapshot = results.getCurrent();
             Observable<Vault.Update> updates = results.getFuture();
 
-            // DOCEND VaultJavaQueryExample1
+            // DOCEND VaultJavaQueryExample4
             assertThat(snapshot.getStates()).hasSize(3);
 
             return tx;
@@ -259,7 +259,7 @@ public class VaultQueryJavaTests {
             List<String> dealIds = Arrays.asList("123", "456", "789");
             fillWithSomeTestDeals(services, dealIds);
 
-            // DOCSTART VaultJavaQueryExample2
+            // DOCSTART VaultJavaQueryExample5
             @SuppressWarnings("unchecked")
             Set<Class<ContractState>> contractStateTypes = new HashSet(Arrays.asList(DealState.class, LinearState.class));
             QueryCriteria vaultCriteria = new VaultQueryCriteria(Vault.StateStatus.UNCONSUMED, contractStateTypes);
@@ -282,7 +282,7 @@ public class VaultQueryJavaTests {
 
             Vault.Page<ContractState> snapshot = results.getCurrent();
             Observable<Vault.Update> updates = results.getFuture();
-            // DOCEND VaultJavaQueryExample2
+            // DOCEND VaultJavaQueryExample5
 
             assertThat(snapshot.getStates()).hasSize(4);
 

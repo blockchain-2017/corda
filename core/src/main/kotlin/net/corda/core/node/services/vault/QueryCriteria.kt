@@ -83,8 +83,7 @@ sealed class QueryCriteria {
      * (see Persistence documentation for more information)
      *
      * Params
-     *  [expression] refers to a (composable) JPA Query like WHERE expression clauses of the form:
-     *      [JPA entityAttributeName] [Operand] [Value]
+     *  [expression] refers to a (composable) type safe [CriteriaExpression]
      *
      * Refer to [CommercialPaper.State] for a concrete example.
      */
