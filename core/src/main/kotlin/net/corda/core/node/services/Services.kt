@@ -108,6 +108,7 @@ class Vault<out T : ContractState>(val states: Iterable<StateAndRef<T>>) {
         val NoUpdate = Update(emptySet(), emptySet())
     }
 
+    @CordaSerializable
     enum class StateStatus {
         UNCONSUMED, CONSUMED, ALL
     }
@@ -141,7 +142,7 @@ class Vault<out T : ContractState>(val states: Iterable<StateAndRef<T>>) {
                              val lockUpdateTime: Instant?)
 
     @CordaSerializable
-    data class PageAndUpdates<out T : ContractState> (val current: Vault.Page<T>, val future: Observable<Vault.Update>? = null)
+    data class PageAndUpdates<out T : ContractState> (val current: Vault.Page<T>, val future: Observable<Vault.Update>)
 }
 
 /**

@@ -23,11 +23,13 @@ import javax.persistence.criteria.Predicate
 sealed class QueryCriteria {
     abstract fun visit(parser: IQueryCriteriaParser): Collection<Predicate>
 
+    @CordaSerializable
     data class TimeCondition(val type: TimeInstantType, val predicate: ColumnPredicate<Instant>)
 
     /**
      * VaultQueryCriteria: provides query by attributes defined in [VaultSchema.VaultStates]
      */
+    @CordaSerializable
     data class VaultQueryCriteria @JvmOverloads constructor (
             val status: Vault.StateStatus = Vault.StateStatus.UNCONSUMED,
             val contractStateTypes: Set<Class<out ContractState>>? = null,
@@ -44,6 +46,7 @@ sealed class QueryCriteria {
     /**
      * LinearStateQueryCriteria: provides query by attributes defined in [VaultSchema.VaultLinearState]
      */
+    @CordaSerializable
     data class LinearStateQueryCriteria @JvmOverloads constructor(
             val participants: List<AbstractParty>? = null,
             val linearId: List<UniqueIdentifier>? = null,
@@ -61,6 +64,7 @@ sealed class QueryCriteria {
     *   [Currency] as used in [Cash] contract state
     *   [Commodity] as used in [CommodityContract] state
     */
+   @CordaSerializable
     data class FungibleAssetQueryCriteria @JvmOverloads constructor(
            val participants: List<AbstractParty>? = null,
            val owner: List<AbstractParty>? = null,
@@ -84,6 +88,7 @@ sealed class QueryCriteria {
      *
      * Refer to [CommercialPaper.State] for a concrete example.
      */
+    @CordaSerializable
     data class VaultCustomQueryCriteria<L : PersistentState>(val expression: CriteriaExpression<L, Boolean>) : QueryCriteria() {
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseCriteria(this)
@@ -91,12 +96,14 @@ sealed class QueryCriteria {
     }
 
     // enable composition of [QueryCriteria]
+    @CordaSerializable
     data class AndComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseAnd(this.a, this.b)
         }
     }
 
+    @CordaSerializable
     data class OrComposition(val a: QueryCriteria, val b: QueryCriteria): QueryCriteria() {
         override fun visit(parser: IQueryCriteriaParser): Collection<Predicate> {
             return parser.parseOr(this.a, this.b)
