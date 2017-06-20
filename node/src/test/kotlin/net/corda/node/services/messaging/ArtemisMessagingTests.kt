@@ -63,7 +63,8 @@ class ArtemisMessagingTests {
     var messagingServer: ArtemisMessagingServer? = null
 
     val identityService = InMemoryIdentityService(emptySet(), emptyMap(), null as X509CertificateHolder?)
-    val networkMapCache = InMemoryNetworkMapCache(identityService)
+    // TODO: We should have a dummy service hub rather than change behaviour in tests
+    val networkMapCache = InMemoryNetworkMapCache(serviceHub = null)
 
     val rpcOps = object : RPCOps {
         override val protocolVersion: Int get() = throw UnsupportedOperationException()

@@ -37,9 +37,13 @@ import javax.annotation.concurrent.ThreadSafe
 
 /**
  * Extremely simple in-memory cache of the network map.
+ *
+ * @param serviceHub an optional service hub from which we'll take the identity service. We take a service hub rather
+ * than the identity service directly, as this avoids problems with service start sequence (network map cache
+ * and identity services depend on each other). Should always be provided except for unit test cases.
  */
 @ThreadSafe
-open class InMemoryNetworkMapCache(val identityService: IdentityService) : SingletonSerializeAsToken(), NetworkMapCacheInternal {
+open class InMemoryNetworkMapCache(private val serviceHub: ServiceHub?) : SingletonSerializeAsToken(), NetworkMapCacheInternal {
     companion object {
         val logger = loggerFor<InMemoryNetworkMapCache>()
     }
@@ -74,7 +78,12 @@ open class InMemoryNetworkMapCache(val identityService: IdentityService) : Singl
 
     override fun getNodeByLegalIdentityKey(identityKey: PublicKey): NodeInfo? = registeredNodes[identityKey]
     override fun getNodeByLegalIdentity(party: AbstractParty): NodeInfo? {
-        val wellKnownParty = identityService.partyFromAnonymous(party)
+        val wellKnownParty = if (serviceHub != null) {
+            serviceHub.identityService.partyFromAnonymous(party)
+        } else {
+            party
+        }
+
         return wellKnownParty?.let {
             getNodeByLegalIdentityKey(it.owningKey)
         }

@@ -441,6 +441,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
         val storageServices = initialiseStorageService(configuration.baseDirectory)
         storage = storageServices.first
         checkpointStorage = storageServices.second
+        netMapCache = InMemoryNetworkMapCache(services)
         network = makeMessagingService()
         schemas = makeSchemaService()
         vault = makeVaultService(configuration.dataSourceProperties)
@@ -453,7 +454,6 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
         // the KMS is meant for derived temporary keys used in transactions, and we're not supposed to sign things with
         // the identity key. But the infrastructure to make that easy isn't here yet.
         keyManagement = makeKeyManagementService(identity)
-        netMapCache = InMemoryNetworkMapCache(identity)
         scheduler = NodeSchedulerService(services, database, unfinishedSchedules = busyNodeLatch)
 
         val tokenizableServices = mutableListOf(storage, network, vault, keyManagement, identity, platformClock, scheduler)

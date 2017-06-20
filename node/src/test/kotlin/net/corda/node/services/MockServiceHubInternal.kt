@@ -43,7 +43,7 @@ open class MockServiceHubInternal(
     override val networkService: MessagingService
         get() = network ?: throw UnsupportedOperationException()
     override val networkMapCache: NetworkMapCacheInternal
-        get() = mapCache ?: MockNetworkMapCache(identityService)
+        get() = mapCache ?: MockNetworkMapCache(this)
     override val storageService: StorageService
         get() = storage ?: throw UnsupportedOperationException()
     override val schedulerService: SchedulerService
